@@ -2001,7 +2001,7 @@ function softSnap(delay){
   clearTimeout(Wheel.snapTimer);
   Wheel.snapTimer = setTimeout(() => {
     const snap = Math.round(state.target);
-    gsap.to(state, { target:clampT(Math.max(0, Math.min(count()-1, snap))), duration:1.25, ease:'power2.out', overwrite:'auto' });
+    gsap.to(state, { target:clampT(Math.max(0, Math.min(count()-1, snap))), duration:0.95, ease:'power2.out', overwrite:'auto' });
     gsap.to(state, { orbitT:0, duration:2.2, ease:'power2.inOut' });
   }, delay);
 }
@@ -2032,7 +2032,7 @@ addEventListener('wheel', e => {
   hideHint();
   clearTimeout(Wheel.snapTimer);
   if(step) Wheel.dir = Math.sign(step);
-  softSnap(looksTrackpad ? 300 : 200);
+  softSnap(looksTrackpad ? 170 : 120);
 }, { passive:false });
 // Safari: block native pinch-zoom gestures on the canvas
 ['gesturestart','gesturechange','gestureend'].forEach(t => document.addEventListener(t, e => e.preventDefault(), { passive:false }));
@@ -2064,7 +2064,7 @@ addEventListener('pointermove', e => {
 addEventListener('pointerup', e => {
   if(!dragging) return;
   dragging = false; ui.cursor.classList.remove('drag');
-  if(moved > 6 && !detailOpen) softSnap(260);                   // releasing a drag settles on the nearest work
+  if(moved > 6 && !detailOpen) softSnap(160);                   // releasing a drag settles on the nearest work
   if(moved < 8 && e.target === canvas){
     if(e.pointerType === 'touch'){ state.mx = (e.clientX/innerWidth)*2-1; state.my = -(e.clientY/innerHeight)*2+1; mouse.set(state.mx,state.my); }
     const hit = pick();                           // while a work is open, only its own surface counts as a hit
@@ -3083,7 +3083,7 @@ function tick(){
   if(!Gate.active && !Gate.running && !detailOpen && count() && state.cur > count()-1+0.8) Gate.exit();
   const prev = state.cur;
   // softer follow for trackpads (their own inertia already smooths input) → no double-momentum overshoot
-  const follow = 1 - Math.pow(1 - 0.05, dt*60);                 // current += (target − current) × 0.05: a slow, gliding ease, frame-rate independent
+  const follow = 1 - Math.pow(1 - 0.1, dt*60);                 // current += (target − current) × 0.10: a responsive yet gliding ease, frame-rate independent
   state.cur += (state.target - state.cur) * follow;
   state.vel = state.cur - prev;
   state.orbit += (state.orbitT - state.orbit) * kSlow;
