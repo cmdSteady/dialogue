@@ -1,0 +1,9 @@
+<meta name="description" content="시간의 지평선 너머 잠들어 있던 침묵의 문으로 걸어 들어오십시오.">
+<meta name="theme-color" content="#050508">
+<meta name="robots" content="noindex,nofollow">
+<meta property="og:type" content="website">
+<meta property="og:title" content="천년의 대화 — Dialogue of a Thousand Years">
+<meta property="og:description" content="시간의 지평선 너머 잠들어 있던 침묵의 문으로 걸어 들어오십시오.">
+<meta property="og:locale" content="ko_KR">
+<meta name="twitter:card" content="summary">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='14' fill='%23050508'/><circle cx='32' cy='32' r='15' fill='%23000' stroke='%23D8C7A5' stroke-width='3.2'/><circle cx='32' cy='32' r='21' fill='none' stroke='%23D8C7A5' stroke-opacity='.35' stroke-width='1.2'/></svg>">
