@@ -34,7 +34,10 @@
 ## 어드민(원본 전용)
 - PIN은 기본 1234 입니다. 어드민 수정은 접속한 브라우저의 IndexedDB에만 저장됩니다. 방문자용 사이트와는 연결되지 않습니다.
 - 그래서 홈페이지 내용을 바꾸려면 `index.master.html`의 `DEFAULT_ART` 배열을 수정하고 다시 빌드해야 합니다.
-- 어드민 수정을 사이트에 자동 반영하려면 서버 저장소와 로그인 보안을 붙이는 별도 개발이 필요합니다(아직 하지 않음).
+- 어드민 수정을 사이트에 반영하는 방법: 배포 사이트의 `/admin`(= `index.master.html`, `vercel.json` rewrite)에서 수정하고 **Save & 사이트에 배포**를 누르면 비밀 키(`PUBLISH_SECRET`)를 물어봅니다. 키가 맞으면 `api/publish.js`가 `index.master.html`의 `DEFAULT_ART`를 갱신하고 `index.html`을 빌드해 GitHub `main`에 한 번에 커밋합니다. Vercel이 자동 배포합니다.
+- 서버 환경변수: `PUBLISH_SECRET`(배포 비밀 키), `GITHUB_TOKEN`(이 저장소 contents 쓰기 전용 fine-grained 토큰). 둘 다 Vercel 대시보드에만 두고 채팅·코드에 넣지 않습니다.
+- `api/publish.js`의 `buildVisitor()`는 `tools/build_deploy.py`를 JS로 옮긴 것입니다. 빌드 규칙을 바꾸면 두 곳을 같이 고칩니다.
+- `/admin`은 공개 URL입니다(검색 노출은 `X-Robots-Tag`로 막음). 원본 UI는 누구나 볼 수 있으므로, 쓰기는 반드시 비밀 키로만 열립니다. 비밀 키가 노출되면 Vercel에서 `PUBLISH_SECRET`을 바꾸고 재배포합니다.
 
 ## 작품 13점 (DEFAULT_ART, uid 순서)
 1. 남유 백룡문 매병 한 쌍 (원대, 14th C.)

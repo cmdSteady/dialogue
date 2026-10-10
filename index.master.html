@@ -522,10 +522,9 @@ body.is-admin #dEdit{display:inline-block}
     <p class="note">백업 파일에는 업로드한 이미지가 모두 포함됩니다. 다른 PC나 브라우저에서 [백업 불러오기]로 그대로 옮길 수 있어요.</p>
 
     <div class="sect">사이트 배포 · PUBLISH</div>
-    <div class="field"><label>비밀 키 (PUBLISH_SECRET)</label><input id="publishSecret" type="password" autocomplete="off" data-cursor="ui" /></div>
     <div class="inrow" style="margin-top:10px"><button class="iconbtn" id="publishBtn" data-cursor="ui" style="flex:1">🚀 Save &amp; 사이트에 배포</button></div>
     <p class="note" id="publishMsg" role="status"></p>
-    <p class="note">배포하면 방문자 사이트가 GitHub main에 커밋되고, Vercel이 자동으로 다시 배포합니다. 비밀 키는 저장되지 않으니 매번 입력하세요. 업로드 이미지가 많으면 전송 용량 한도(약 4.5MB)를 넘어 실패할 수 있어요.</p>
+    <p class="note">누르면 비밀 키를 물어봅니다. 키가 맞으면 방문자 사이트가 GitHub main에 커밋되고, Vercel이 자동으로 다시 배포합니다. 키는 저장되지 않습니다. 업로드 이미지가 많으면 전송 용량 한도(약 4.5MB)를 넘어 실패할 수 있어요.</p>
 
     <div class="sect">보안 · PIN</div>
     <div class="grid2">
@@ -2554,9 +2553,11 @@ $('importIn').addEventListener('change', e => { const f = e.target.files[0]; e.t
 
 /* ---------- publish to the live site (POST /api/publish) ---------- */
 async function publishSite(){
-  const btn = $('publishBtn'), msg = $('publishMsg'), secret = $('publishSecret').value;
-  if(!secret){ msg.textContent = '비밀 키를 입력하세요'; return; }
+  const btn = $('publishBtn'), msg = $('publishMsg');
   if(!items.length || items.length > MAX_ITEMS){ msg.textContent = `작품은 1~${MAX_ITEMS}점이어야 해요`; return; }
+  const secret = window.prompt('배포 비밀 키(PUBLISH_SECRET)를 입력하세요.\n입력한 키는 저장되지 않습니다.');
+  if(!secret) return;
+  if(!window.confirm(`작품 ${items.length}점을 사이트에 배포할까요?\n(GitHub main에 커밋되고 1~2분 뒤 반영됩니다)`)) return;
   btn.disabled = true; msg.textContent = '배포 준비 중…';
   try{
     save(); // keep the local IndexedDB copy in sync too
