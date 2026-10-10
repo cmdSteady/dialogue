@@ -1019,10 +1019,12 @@ const softDot = (() => {
 const tubeMat = { uniforms:{ uTime:{value:0}, uDim:{value:1} } };      // (backbone wires removed — kept only so old references stay valid)
 
 const dnaMat = new THREE.ShaderMaterial({
-  uniforms:{ uTime:{value:0}, uPR:{value:DPR}, uR:{value:HELIX_R}, uTwist:{value:TWIST}, uVel:{value:0}, uFocusY:{value:0}, uInt:{value:1.4}, uTex:{value:softDot} },
+  uniforms:{ uTime:{value:0}, uPR:{value:DPR}, uR:{value:HELIX_R}, uTwist:{value:TWIST}, uVel:{value:0}, uFocusY:{value:0}, uInt:{value:1.4}, uTex:{value:softDot},
+    uTarget:{value:new THREE.Vector3()}, uPull:{value:0} },
   vertexShader:`
     attribute float aY; attribute float aType; attribute float aS; attribute vec4 aRand; attribute float aSize; attribute float aC;
-    uniform float uTime, uPR, uR, uTwist, uVel, uFocusY, uInt;
+    uniform float uTime, uPR, uR, uTwist, uVel, uFocusY, uInt, uPull;
+    uniform vec3 uTarget;
     varying vec3 vCol; varying float vAlpha;
     const vec3 EMERALD = vec3(0.059, 0.298, 0.271);   // #0F4C45
     const vec3 GOLD    = vec3(0.847, 0.780, 0.647);   // #D8C7A5
@@ -1046,6 +1048,10 @@ const dnaMat = new THREE.ShaderMaterial({
         float a = ang + (aRand.w - 0.5)*3.2 + swirl*0.35;
         p = vec3(cos(a)*r, y, sin(a)*r) + aRand.xyz*vec3(0.9, 1.5, 0.9)*(0.8 + 0.5*breathe); baseA = 0.22; sizeK = 2.4;
       }
+      // the light gathers toward the work being hovered or opened (soft pull, sigma ~5 units)
+      vec3 dt3 = p - uTarget;
+      float pw = exp(-dot(dt3, dt3) / 50.0) * uPull;
+      p = mix(p, uTarget + dt3*0.5, pw*0.7);
       p.y += uVel * (aRand.w - 0.5) * 2.0;
       vec4 mv = modelViewMatrix * vec4(p, 1.0);
       gl_Position = projectionMatrix * mv;
@@ -1056,7 +1062,7 @@ const dnaMat = new THREE.ShaderMaterial({
       float pulse = pow(0.5 + 0.5*sin(y*0.7 - uTime*1.8 + aC*3.0), 9.0);
       vCol = col * (0.9 + 0.9*pulse);
       float near = exp(-pow((y - uFocusY)*0.07, 2.0));
-      vAlpha = baseA * (0.65 + 0.35*breathe) * (0.5 + 0.5*near) * uInt * smoothstep(1.2, 6.5, -mv.z);
+      vAlpha = baseA * (0.65 + 0.35*breathe) * (0.5 + 0.5*near) * uInt * smoothstep(1.2, 6.5, -mv.z) * (1.0 + 1.1*pw);
       gl_PointSize = min(aSize * sizeK * (1.0 + 0.9*pulse) * uPR * (46.0 / -mv.z), 26.0*uPR);
     }`,
   fragmentShader:`
@@ -1183,6 +1189,7 @@ const panelFS = `
   ${GLSL_COMMON}
   uniform sampler2D uMap; uniform float uHasMap, uImgAspect, uHover, uTime, uGlitch, uReveal, uSeed, uActive, uFit;
   uniform vec2 uSize; uniform float uMargin, uRadius; uniform vec3 uRim, uGlowCol;
+  uniform vec2 uCoreDir; uniform float uCoreK;                 // direction (in the panel plane) toward the particle core
   varying vec2 vUv; varying vec3 vN; varying vec3 vV;
   float sdRR(vec2 p, vec2 b, float r){ vec2 q = abs(p)-b+r; return length(max(q,0.0)) + min(max(q.x,q.y),0.0) - r; }
   void main(){
@@ -1209,7 +1216,7 @@ const panelFS = `
     vec3 tex = vec3(texture2D(uMap, tuv+vec2(ca,0.)).r, t4.g, texture2D(uMap, tuv-vec2(ca,0.)).b);
     // cut-out works (transparent PNG/WebP): stage them on a dark plate with a faint pool of light behind
     vec2 sp2 = iuv - vec2(0.5, 0.46);
-    vec3 stage = vec3(0.012,0.02,0.02) + uGlowCol*0.03 + vec3(0.054,0.066,0.057)*exp(-dot(sp2*vec2(1.1,0.9), sp2*vec2(1.1,0.9))*5.0);
+    vec3 stage = vec3(0.012,0.02,0.02) + uGlowCol*0.03;                 // flat void: no pool of light behind the work
     tex = mix(stage, tex, t4.a);
 
     // contain mode: outside the artwork, a soft blurred + darkened extension of the work itself (mat)
@@ -1239,7 +1246,8 @@ const panelFS = `
     col *= 0.70 + 0.06*focus;
     float gl = (1.0 - uActive) * (1.0 - 0.3*uHover);                // 1 = frosted translucent glass (browsing), 0 = clear (opened)
     float brightW = smoothstep(0.35, 0.8, lum);                       // pale works: less frost lift so the carving survives
-    col = mix(col, col*(0.62 - 0.08*brightW) + vec3(0.47,0.49,0.58)*0.46*(1.0 - 0.55*brightW), gl*0.85);
+    // frost only on the work itself (cut-outs), so the void around it stays black
+    col = mix(col, col*(0.62 - 0.08*brightW) + vec3(0.47,0.49,0.58)*0.46*(1.0 - 0.55*brightW), gl*0.85*mix(1.0, t4.a, uHasMap));
     float lumB = dot(col, vec3(0.333));
     col = col / (1.0 + 0.30*lumB);                                // soft highlight roll-off (no bloom blow-out)
     col *= 1.0 - 0.22*smoothstep(0.38, 0.8, lumB);                // pale works (white porcelain, crystal, celadon) keep their carving
@@ -1267,7 +1275,22 @@ const panelFS = `
     float energy = 0.3 + 0.8*uHover + 0.45*fres + 0.45*uActive;
     rimC = mix(rimC, vec3(0.80,0.84,0.95), gl*0.55);
     vec3 rim = rimC * line * 0.05 * energy;
-    vec3 c = col*inside + rim + rimC*outer*(0.02 + 0.1*uHover + 0.06*uActive);
+    // particle rim light: the glow of the helix core catches the edge of the work that faces it
+    vec2 nrm;
+    { vec2 qq = abs(p) - uSize*0.5 + uRadius;
+      nrm = (qq.x > 0.0 || qq.y > 0.0) ? normalize(max(qq, 0.0))*sign(p) : (qq.x > qq.y ? vec2(sign(p.x), 0.0) : vec2(0.0, sign(p.y))); }
+    float facing = max(dot(nrm, uCoreDir), 0.0);
+    float rimBand = smoothstep(0.035, 0.0, abs(d + 0.006)) + 0.45*exp(-max(d, 0.0)*14.0)*(1.0 - inside);
+    vec3 coreC = mix(vec3(0.46, 1.0, 0.88), vec3(0.97, 0.90, 0.74), smoothstep(0.6, 1.0, facing));
+    // silhouette rim: the outline of a cut-out work that faces the core catches its light
+    float sx = texture2D(uMap, tuv + vec2(0.005, 0.0)).a - texture2D(uMap, tuv - vec2(0.005, 0.0)).a;
+    float sy = texture2D(uMap, tuv + vec2(0.0, 0.005)).a - texture2D(uMap, tuv - vec2(0.0, 0.005)).a;
+    vec2 sg = vec2(sx, sy); float sgl = length(sg);
+    vec2 sN = -sg / (sgl + 1e-4);                                   // outward normal of the silhouette
+    float sFacing = max(dot(sN, uCoreDir), 0.0);
+    float silRim = smoothstep(0.05, 0.5, sgl) * pow(sFacing, 2.0) * uHasMap * (1.0 - 0.6*gl);
+    vec3 coreRim = coreC * (pow(facing, 2.2) * rimBand * 0.5 + silRim * 0.85) * uCoreK;
+    vec3 c = col*inside + rim + rimC*outer*(0.02 + 0.1*uHover + 0.06*uActive) + coreRim;
     vec2 rq = (iuv - 0.5) * 2.0;
     float rr = length(rq * vec2(0.97, 0.93));
     float plateK = 1.0 - smoothstep(0.50, 0.98, rr);                              // soft elliptical falloff of the stage plate
@@ -1296,7 +1319,7 @@ const glowFS = `
     // slow drifting light leaks so the halo feels alive, not a flat sticker
     float drift = 0.75 + 0.25*noise(p*0.6 + vec2(uTime*0.12, -uTime*0.08) + uSeed);
     vec3 col = mix(uRim, uGlowCol, mix(0.35, 0.8, uHasMap));
-    float k = g * drift * breathe * (0.12 + 0.30*uHover + 0.26*uActive) * uAlpha;
+    float k = g * drift * breathe * (0.008 + 0.10*uHover + 0.14*uActive) * uAlpha;   // almost none at rest: no white disc behind the work
     gl_FragColor = vec4(col * k, k);
   }`;
 
@@ -1462,7 +1485,8 @@ function createPanel(item){
     uGlitch:{value:0}, uReveal:{value:1.2}, uSeed:{value:seed}, uActive:{value:0},
     uSize:{value:new THREE.Vector2(PW,PH)}, uMargin:{value:MARGIN}, uRadius:{value:0.3},
     uRim:{value:new THREE.Color(RIMS[seedCounter%3])},
-    uFit:{value: item.fit === 'contain' ? 1 : 0}, uGlowCol:{value:new THREE.Color(RIMS[seedCounter%3])}
+    uFit:{value: item.fit === 'contain' ? 1 : 0}, uGlowCol:{value:new THREE.Color(RIMS[seedCounter%3])},
+    uCoreDir:{value:new THREE.Vector2(0, 1)}, uCoreK:{value:1}
   };
   const front = new THREE.Mesh(frontGeo, new THREE.ShaderMaterial({ uniforms, vertexShader:panelVS, fragmentShader:panelFS, transparent:true, depthWrite:false }));
   front.position.z = 0.012; front.renderOrder = 2; inner.add(front);
@@ -1913,8 +1937,9 @@ const finalPass = new THREE.ShaderPass({
       col *= smoothstep(0.95, 0.25, length(c)*1.15);
       vec2 sc = vec2(c.x*uAsp*0.62, c.y*1.05);
       float sp = smoothstep(0.62, 0.05, length(sc));
-      col *= mix(1.0, 0.42 + 0.58*sp, uSpot);                 // gallery spotlight: room dims, centre stays lit
-      col += vec3(0.16,0.20,0.17) * pow(sp, 2.2) * 0.07 * uSpot; // faint cool pool of light behind the work
+      // no spotlight pool: when a work is opened the edges sink into the void (soft fog, not a light)
+      float fogV = smoothstep(0.22, 0.98, length(sc));
+      col = mix(col, col*0.2, fogV*uSpot*0.85);
       col += (h(uv*uRes + fract(uTime)*100.0) - 0.5) * 0.045;
       gl_FragColor = vec4(col, 1.0);
     }`
@@ -2968,6 +2993,7 @@ const Gate = (() => {
    LOOP
    ========================================================= */
 const clock = new THREE.Clock();
+const _tmpW = new THREE.Vector3(), _axisW = new THREE.Vector3(), dnaTarget = new THREE.Vector3();
 function tick(){
   const dt = Math.min(clock.getDelta(), 0.05), t = clock.elapsedTime;
   const k = 1 - Math.pow(0.001, dt), kSlow = 1 - Math.pow(0.02, dt);
@@ -3022,9 +3048,21 @@ function tick(){
     if(!dragging){ ui.cursor.classList.toggle('view', !!h); ui.cursorTxt.textContent = (h && state.focusP !== h) ? 'VIEW' : 'DRAG'; }
   }
 
+  // the particle light gathers toward the work being hovered (or opened)
+  {
+    const tp = hovered || (fpValid && state.focus > 0.5 ? fp : null);
+    if(tp){ tp.front.getWorldPosition(_tmpW); dna.worldToLocal(_tmpW); dnaTarget.lerp(_tmpW, 1 - Math.pow(0.02, dt)); }
+    const pu = dnaMat.uniforms.uPull;
+    pu.value += ((tp ? 1 : 0) - pu.value) * (1 - Math.pow(0.05, dt));
+    dnaMat.uniforms.uTarget.value.copy(dnaTarget);
+  }
+
   panels.forEach((p, i) => {
     const isH = p === hovered;
     p.hover += ((isH?1:0) - p.hover) * k*0.9;
+    // rim light direction: from this work toward the helix core at the same height (panel-plane coordinates)
+    { p.front.getWorldPosition(_tmpW); _axisW.copy(_tmpW); dna.worldToLocal(_axisW); _axisW.x = 0; _axisW.z = 0; dna.localToWorld(_axisW);
+      p.front.worldToLocal(_axisW); p.uniforms.uCoreDir.value.set(_axisW.x, _axisW.y).normalize(); p.uniforms.uCoreK.value = 0.85 + 0.5*p.hover; }
     p.uniforms.uHover.value = p.hover; p.uniforms.uTime.value = t;
     p.lu.uTime.value = t; p.lu.uHover.value = p.hover;
     updateVines(p, t);
@@ -3034,11 +3072,12 @@ function tick(){
     { const gk = (1-active)*(1-0.3*p.hover); p.bm.opacity = 0.9 - 0.52*gk; p.bm.color.setRGB(0.039+0.2*gk, 0.07+0.21*gk, 0.063+0.26*gk); p.bm.transmission = 0.65; p.bm.emissiveIntensity = 0.6 + 0.5*gk; }
     if(p.L && (active > 0.001 || p.wasAct)){ const q = 1 - active; p.anchor.rotation.set(p.L.rx*q, p.L.ry*q, p.L.rz*q); p.wasAct = active > 0.001; }   // focused work squares up to the camera
     p.inner.rotation.x = (p.tiltX + p.jx)*(1-active) + Math.sin(t*0.6 + i)*0.03*(1-active);
-    p.inner.rotation.z = p.jz*(1-active);
+    p.inner.rotation.z = p.jz*(1-active) + Math.sin(t*0.41 + i*1.7)*0.012*(1-active);   // idle: barely-there sway
     { const sc = 1 - (fpValid ? state.focus : 0)*(1-active)*0.999; p.anchor.scale.setScalar(sc); }
     p.inner.rotation.y = p.tiltY*(1-active) + Math.cos(t*0.5 + i*1.3)*0.04*(1-active);
     p.inner.position.z = p.hover*0.55*(1-active);
-    p.inner.position.y = Math.sin(t*0.8 + i*0.9)*0.1*(1-active);
+    // idle floating: slow, layered vertical breathing like an object suspended in deep water
+    p.inner.position.y = (Math.sin(t*0.7 + i*0.9)*0.16 + Math.sin(t*0.29 + i*2.3)*0.07)*(1-active);
     p.lu.uAlpha.value = THREE.MathUtils.clamp(1.4 - Math.abs(i - state.cur)*0.55, 0.15, 1) * (1 - active);
     p.gu.uAlpha.value = THREE.MathUtils.clamp(1.6 - Math.abs(i - state.cur)*0.45, 0.35, 1);
     if(Math.random() < 0.0016) gsap.fromTo(p.lu.uGlitch, {value:.8},{value:0,duration:.4});
