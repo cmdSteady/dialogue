@@ -533,6 +533,12 @@ body.is-admin #dEdit{display:inline-block}
     <input type="file" id="importIn" accept="application/json,.json" hidden />
     <p class="note">백업 파일에는 업로드한 이미지가 모두 포함됩니다. 다른 PC나 브라우저에서 [백업 불러오기]로 그대로 옮길 수 있어요.</p>
 
+    <div class="sect">사이트 배포 · PUBLISH</div>
+    <div class="field"><label>비밀 키 (PUBLISH_SECRET)</label><input id="publishSecret" type="password" autocomplete="off" data-cursor="ui" /></div>
+    <div class="inrow" style="margin-top:10px"><button class="iconbtn" id="publishBtn" data-cursor="ui" style="flex:1">🚀 Save &amp; 사이트에 배포</button></div>
+    <p class="note" id="publishMsg" role="status"></p>
+    <p class="note">배포하면 방문자 사이트가 GitHub main에 커밋되고, Vercel이 자동으로 다시 배포합니다. 비밀 키는 저장되지 않으니 매번 입력하세요. 업로드 이미지가 많으면 전송 용량 한도(약 4.5MB)를 넘어 실패할 수 있어요.</p>
+
     <div class="sect">보안 · PIN</div>
     <div class="grid2">
       <div class="field"><label>현재 PIN</label><input id="pinCur" type="password" inputmode="numeric" maxlength="8" data-cursor="ui" /></div>
@@ -2557,6 +2563,40 @@ $('urlIn').addEventListener('keydown', e => { if(e.key === 'Enter') setItemImage
 $('exportBtn').addEventListener('click', exportBackup);
 $('importBtn').addEventListener('click', () => $('importIn').click());
 $('importIn').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; if(f) importBackup(f); });
+
+/* ---------- publish to the live site (POST /api/publish) ---------- */
+async function publishSite(){
+  const btn = $('publishBtn'), msg = $('publishMsg'), secret = $('publishSecret').value;
+  if(!secret){ msg.textContent = '비밀 키를 입력하세요'; return; }
+  if(!items.length || items.length > MAX_ITEMS){ msg.textContent = `작품은 1~${MAX_ITEMS}점이어야 해요`; return; }
+  btn.disabled = true; msg.textContent = '배포 준비 중…';
+  try{
+    save(); // keep the local IndexedDB copy in sync too
+    const payload = [];
+    for(const it of serialize()){
+      const e = { uid:it.uid, title:it.title, artist:it.artist, year:it.year, medium:it.medium, cat:it.cat, desc:it.desc, fit:it.fit, video:it.video };
+      const def = DEFAULT_ART.find(a => a.uid === it.uid);
+      if(def && it.src.type === 'url' && it.src.url === def.embed) e.builtin = true;   // unchanged built-in image: server keeps its own copy
+      else if(it.src.type === 'blob') e.dataUrl = await blobToDataURL(it.src.blob);   // uploaded file
+      else if(it.src.type === 'url') e.url = it.src.url;                              // image link
+      else throw new Error('이미지가 없는 작품이 있어요');
+      payload.push(e);
+    }
+    msg.textContent = '서버로 보내는 중…';
+    const r = await fetch('/api/publish', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ secret, items: payload }) });
+    if(r.status === 413) throw new Error('업로드 이미지 용량이 전송 한도를 넘었어요');
+    const j = await r.json().catch(() => ({}));
+    if(r.status === 401) throw new Error('비밀 키가 맞지 않아요');
+    if(!r.ok) throw new Error(j.detail || j.error || `오류 ${r.status}`);
+    msg.textContent = `배포 요청 완료 · 커밋 ${String(j.commit).slice(0,7)} · 1~2분 뒤 사이트에 반영돼요`;
+    toast('배포를 요청했어요');
+  }catch(e){
+    msg.textContent = '배포 실패: ' + e.message;
+  }finally{
+    btn.disabled = false;
+  }
+}
+$('publishBtn').addEventListener('click', publishSite);
 const resetBtn = $('resetBtn'), RESET_TXT = '↺ 기본값으로 초기화 (Reset)';
 resetBtn.addEventListener('click', () => {
   if(resetBtn.classList.contains('armed')){ resetBtn.classList.remove('armed'); resetBtn.textContent = RESET_TXT; resetDefaults(); return; }
