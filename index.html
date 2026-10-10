@@ -1293,10 +1293,19 @@ const panelFS = `
       nrm = (qq.x > 0.0 || qq.y > 0.0) ? normalize(max(qq, 0.0))*sign(p) : (qq.x > qq.y ? vec2(sign(p.x), 0.0) : vec2(0.0, sign(p.y))); }
     float facing = max(dot(nrm, uCoreDir), 0.0);
     // silhouette of a cut-out, read from a blurred alpha (mip bias) so no pixel stair-steps appear
-    float aC  = t4.a;
-    float aB2 = texture2D(uMap, tuv, 5.5).a;                          // wide blur → aerosol
+    // the image's own border never leaks: alpha fades to zero over the outermost 1.5% of the picture
+    vec2 bEdge = smoothstep(vec2(0.0), vec2(0.015), tuv) * smoothstep(vec2(0.0), vec2(0.015), 1.0 - tuv);
+    float bM = bEdge.x * bEdge.y;
+    float aC  = t4.a * bM;
+    // wide, smooth alpha blur for the aerosol: 12 golden-angle taps (no mip blocks, no stair-steps)
+    float aB2 = 0.0;
+    for(int i = 0; i < 12; i++){
+      float fi = float(i); float ang = fi*2.39996; float rad = 0.012 + 0.03*sqrt((fi + 0.5)/12.0);
+      aB2 += texture2D(uMap, tuv + vec2(cos(ang), sin(ang))*rad).a;
+    }
+    aB2 = (aB2/12.0) * bM;
     vec2 gS = vec2(texture2D(uMap, tuv + vec2(0.012, 0.0), 3.0).a - texture2D(uMap, tuv - vec2(0.012, 0.0), 3.0).a,
-                   texture2D(uMap, tuv + vec2(0.0, 0.012), 3.0).a - texture2D(uMap, tuv - vec2(0.0, 0.012), 3.0).a);
+                   texture2D(uMap, tuv + vec2(0.0, 0.012), 3.0).a - texture2D(uMap, tuv - vec2(0.0, 0.012), 3.0).a) * bM;
     float gMag = length(gS);
     vec2 sN2 = -gS / (gMag + 1e-4);                                   // outward normal of the silhouette
     float wrap = smoothstep(-0.35, 0.8, dot(sN2, uCoreDir));          // soft wrap-around light on the core side
