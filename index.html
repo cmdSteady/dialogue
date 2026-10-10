@@ -1319,6 +1319,8 @@ const panelFS = `
     vec3 coreRim = coreA * (edgeSoft*wrap*0.40 + halo*0.26) * strength;
     float shade = mix(1.0, 0.76 + 0.30*wrap, uHasMap);                // sculpted light/shadow across the work
     vec3 c = col*inside*shade + coreRim;
+    // highlight shoulder: only the brightest values roll off, so glaze patterns stay legible instead of blowing out to white
+    { float mxc = max(c.r, max(c.g, c.b)); c *= 1.0 / (1.0 + max(mxc - 0.7, 0.0) * 1.5 * uHasMap); }
     vec2 rq = (iuv - 0.5) * 2.0;
     float rr = length(rq * vec2(0.97, 0.93));
     float plateK = 1.0 - smoothstep(0.50, 0.98, rr);                              // soft elliptical falloff of the stage plate
@@ -2065,7 +2067,7 @@ addEventListener('pointerup', e => {
   if(moved > 6 && !detailOpen) softSnap(260);                   // releasing a drag settles on the nearest work
   if(moved < 8 && e.target === canvas){
     if(e.pointerType === 'touch'){ state.mx = (e.clientX/innerWidth)*2-1; state.my = -(e.clientY/innerHeight)*2+1; mouse.set(state.mx,state.my); }
-    const hit = pick(!detailOpen);                           // while a work is open, only its own surface counts as a hit
+    const hit = pick();                           // while a work is open, only its own surface counts as a hit
     if(hit && detailOpen && hit === state.focusP) setStory(!storyOpen);   // clicking the open work toggles its story
     else if(hit) openDetail(hit);
     else if(detailOpen) closeDetail(false, 0.9);             // empty space: glide back to the scroll pose, same as scrolling
@@ -2158,7 +2160,8 @@ function inWork(p, lx, ly){
   }
   return best > 0.25;                                             // forgiving: a few pixels of the silhouette count
 }
-function pick(loose = true){
+// Hit = the artwork's own silhouette only (alpha-tested on the plane). No halo, no zone around the work.
+function pick(){
   ray.setFromCamera(mouse, camera);
   const hits = ray.intersectObjects(panels.map(p => p.front), false);
   for(const h of hits){
@@ -2166,24 +2169,7 @@ function pick(loose = true){
     const p = h.object.userData.panel;
     if(Math.abs(lx) <= PW/2 && Math.abs(ly) <= PH/2 && inWork(p, lx, ly)){ p.hitUV = u; return p; }
   }
-  if(!loose) return null;
-  // invisible hitbox: a generous screen-space halo, 1.8x the work's half-diagonal, so near-misses still open the work
-  const mx = (mouse.x*0.5+0.5)*innerWidth, my = (-mouse.y*0.5+0.5)*innerHeight;
-  const halfDiag = Math.hypot(PW, PH)/2, tanH = Math.tan(camera.fov*Math.PI/360);
-  let best = null, bestD = Infinity;
-  for(const p of panels){
-    if(p.anchor.scale.x < 0.5) continue;
-    p.front.getWorldPosition(_hitP);
-    const dist = camera.position.distanceTo(_hitP);
-    _hitP.project(camera);
-    if(_hitP.z > 1 || dist < 0.01) continue;
-    const sx = (_hitP.x*0.5+0.5)*innerWidth, sy = (-_hitP.y*0.5+0.5)*innerHeight;
-    const pxPerUnit = (innerHeight/2)/(tanH*dist);
-    const R = 1.15*halfDiag*pxPerUnit;                             // tighter than before: a near-miss, not a whole-screen zone
-    if(Math.hypot(mx-sx, my-sy) < R && dist < bestD){ best = p; bestD = dist; }
-  }
-  if(best) best.hitUV = null;
-  return best;
+  return null;
 }
 let hintHidden = false;
 function hideHint(){ if(hintHidden) return; hintHidden = true; ui.hint.style.opacity = 0; }
@@ -3136,7 +3122,7 @@ function tick(){
   if(!Gate.active && !dragging && !blocking() && !isTouch){
     const el = document.elementFromPoint(px, py);
     const settling = performance.now() - Wheel.lastT < 380;      // no hover while the spiral is still moving
-    if(el === canvas && !settling) h = pick(!detailOpen);
+    if(el === canvas && !settling) h = pick();
   }
   if(h !== hovered){
     if(h){ gsap.fromTo(h.lu.uGlitch, {value:.7}, {value:0, duration:.6}); Sound.tick(); }
@@ -3163,7 +3149,7 @@ function tick(){
     p.hover += ((isH?1:0) - p.hover) * k*0.9;
     // rim light direction: from this work toward the helix core at the same height (panel-plane coordinates)
     { p.front.getWorldPosition(_tmpW); _axisW.copy(_tmpW); dna.worldToLocal(_axisW); _axisW.x = 0; _axisW.z = 0; dna.localToWorld(_axisW);
-      p.front.worldToLocal(_axisW); p.uniforms.uCoreDir.value.set(_axisW.x, _axisW.y).normalize(); p.uniforms.uCoreK.value = 0.85 + 0.5*p.hover; }
+      p.front.worldToLocal(_axisW); p.uniforms.uCoreDir.value.set(_axisW.x, _axisW.y).normalize(); p.uniforms.uCoreK.value = 0.6 + 0.2*p.hover; }
     p.uniforms.uHover.value = p.hover; p.uniforms.uTime.value = t;
     p.lu.uTime.value = t; p.lu.uHover.value = p.hover;
     updateVines(p, t);
