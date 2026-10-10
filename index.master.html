@@ -128,6 +128,19 @@ input,textarea{user-select:text;-webkit-user-select:text}
 #about .a4 .ab-l{transform:none}
 #about .a4 .ab-l.focus{opacity:0;transform:scale(.96);filter:blur(14px);font-size:clamp(17px,2.1vw,25px);margin-top:.6em;transition:opacity 2s cubic-bezier(.16,1,.3,1),transform 2s cubic-bezier(.16,1,.3,1),filter 2s cubic-bezier(.16,1,.3,1);transition-delay:1.9s}
 #about .a4.in .ab-l.focus{opacity:1;transform:scale(1);filter:blur(0)}
+/* ---- story lines (acts I-III): slow luminous emergence, fog to sharp, gold halo, one glint, rising gold dust ---- */
+#about .ab-st.a1 .ab-l,#about .ab-st.a2 .ab-l,#about .ab-st.a3 .ab-l{position:relative;opacity:0;filter:blur(16px);transform:translate3d(0,6px,0);will-change:transform,opacity,filter;backface-visibility:hidden;transition:opacity 2.6s cubic-bezier(.16,1,.3,1),filter 2.6s cubic-bezier(.16,1,.3,1),transform 2.6s cubic-bezier(.16,1,.3,1);transition-delay:calc(var(--i,0)*1.2s)}
+#about .ab-st.a1.in .ab-l,#about .ab-st.a2.in .ab-l,#about .ab-st.a3.in .ab-l{opacity:1;filter:none;transform:none;will-change:auto}
+#about .ab-st.a1 .ab-l .ab-v,#about .ab-st.a2 .ab-l .ab-v,#about .ab-st.a3 .ab-l .ab-v{transform:none;transition:none;letter-spacing:.22em;color:transparent;-webkit-text-fill-color:transparent;background-image:linear-gradient(100deg,transparent 42%,rgba(255,240,205,.55) 50%,transparent 58%),linear-gradient(180deg,#f3ecdc 0%,#e2d9c8 46%,#c9b07a 100%);background-size:260% 100%,100% 100%;background-repeat:no-repeat;background-position:0 0,0 0;-webkit-background-clip:text;background-clip:text}
+#about .ab-st.a1 .ab-l em,#about .ab-st.a2 .ab-l em,#about .ab-st.a3 .ab-l em{color:#E9CF97;-webkit-text-fill-color:#E9CF97}
+#about .ab-st.a1.in .ab-l .ab-v,#about .ab-st.a2.in .ab-l .ab-v,#about .ab-st.a3.in .ab-l .ab-v{animation:abhalo 2.8s ease-in-out calc(var(--i,0)*1.2s) 1 both,abglint 2.4s cubic-bezier(.4,0,.25,1) calc(var(--i,0)*1.2s + 2.6s) 1 both}
+#about .ab-st.a1 .ab-l::after,#about .ab-st.a2 .ab-l::after,#about .ab-st.a3 .ab-l::after{content:'';position:absolute;left:0;right:0;top:-.25em;bottom:-.25em;pointer-events:none;opacity:0;background-image:radial-gradient(circle,rgba(232,207,149,.9) 0 .9px,transparent 1.8px),radial-gradient(circle,rgba(243,226,180,.7) 0 .7px,transparent 1.5px),radial-gradient(circle,rgba(201,176,122,.8) 0 1px,transparent 2px);background-size:23px 19px,31px 27px,17px 22px;background-position:8% 85%,46% 92%,78% 70%;background-repeat:no-repeat}
+#about .ab-st.a1.in .ab-l::after,#about .ab-st.a2.in .ab-l::after,#about .ab-st.a3.in .ab-l::after{animation:abdust 3.6s ease-out calc(var(--i,0)*1.2s + 1.6s) 1 both}
+@keyframes abhalo{0%{text-shadow:0 0 0 rgba(212,175,55,0)}45%{text-shadow:0 0 25px rgba(212,175,55,.25)}100%{text-shadow:0 0 0 rgba(212,175,55,0)}}
+@keyframes abglint{from{background-position:0 0,0 0}to{background-position:100% 0,0 0}}
+@keyframes abdust{0%{opacity:0;transform:translateY(.4em)}40%{opacity:.85}100%{opacity:0;transform:translateY(-.7em)}}
+/* the great black hole: a ring that can fold to a point and open again into the portal */
+#about .ab-hole{position:fixed;left:50%;top:50%;width:92px;height:92px;margin:-46px 0 0 -46px;border-radius:50%;background:radial-gradient(circle,#000 0 62%,#030406 70%,rgba(3,4,6,0) 73%);box-shadow:0 0 0 1px rgba(232,238,245,.55),0 0 24px 4px rgba(216,199,165,.35),0 0 70px 14px rgba(110,226,210,.10);pointer-events:none;z-index:26}
 @media (max-width:820px){#about .ab-l{letter-spacing:.15em;padding-left:.15em}#about .ab-st{padding:18vh 0}}
 #flash{position:fixed;inset:0;z-index:95;background:radial-gradient(ellipse at 50% 50%,rgba(236,243,238,.96) 0%,rgba(184,208,200,.9) 46%,rgba(96,128,124,.82) 100%);opacity:0;pointer-events:none}
 
@@ -357,8 +370,6 @@ body.is-admin #dEdit{display:inline-block}
 </div>
 
 <div id="brand" class="hud">
-  <div class="mark"></div>
-  <div><div class="t1">천년의 대화</div><div class="t2">DIALOGUE OF A THOUSAND YEARS</div></div>
   <span id="adminBadge">ADMIN MODE</span>
 </div>
 
@@ -405,8 +416,8 @@ body.is-admin #dEdit{display:inline-block}
     <div class="ab-top">
       <div class="ab-rv ab-kick" style="--i:0"><span class="ab-v"><span class="ab-ins" style="--c:rgba(200,184,150,.78)">DIALOGUE OF A THOUSAND YEARS</span></span></div>
       <h1 class="ab-rv ab-title" style="--i:1"><span class="ab-v"><span class="ab-ins">천 년 의 대 화</span></span></h1>
-      <div class="ab-rv ab-cue" style="--i:5"><span class="ab-v">SCROLL</span></div>
     </div>
+      <div class="ab-rv ab-cue" style="--i:5"><span class="ab-v">SCROLL</span></div>
     <div class="ab-st a1">
       <span class="ab-l" style="--i:0"><span class="ab-v">모든 형태는 필연적으로 흩어지며,</span></span>
       <span class="ab-l" style="--i:1"><span class="ab-v">역사는 끝없는 망각의 심연으로 침전합니다.</span></span>
@@ -1993,6 +2004,11 @@ function softSnap(delay){
     gsap.to(state, { orbitT:0, duration:2.2, ease:'power2.inOut' });
   }, delay);
 }
+// ── scroll tuning: the prologue (read slowly) and the 3D gallery (responsive) are tuned separately ──
+const SCROLL_TUNE = {
+  prologue: { sens:0.45, lerp:0.10, dead:2 },                  // heavy and glide-y, so each line can be read
+  gallery:  { mouse:0.0016*1.35, trackpad:0.0012*1.35 }       // wheel delta +35%: the helix answers quickly
+};
 addEventListener('wheel', e => {
   if(e.target.closest && e.target.closest('#drawer, #caption, #pinWrap, #story, #video, #about')) return;
   if(blocking()) return;
@@ -2010,7 +2026,7 @@ addEventListener('wheel', e => {
   if(detailOpen){ if(Math.abs(dy) < 4 && Math.abs(dx) < 4) return; closeDetail(false, 0.9); }   // scroll leaves the focus view AND scrolls at once
   // ignore the near-zero creep at the end of macOS inertial scrolling
   if(looksTrackpad && Math.abs(dy) < 1.2 && Math.abs(dx) < 1.2) return;
-  const k = looksTrackpad ? 0.0012 : 0.0016;     // panels per px: slower travel, so the eye can follow each work
+  const k = looksTrackpad ? SCROLL_TUNE.gallery.trackpad : SCROLL_TUNE.gallery.mouse;   // panels per px (SCROLL_TUNE)
   let step = Math.max(-100, Math.min(100, dy)) * k;  // clamp spikes
   // lead cap: the target may never run more than N artworks ahead of the camera,
   // so a long inertial flick can't fling through the whole helix (frame-rate independent)
@@ -2199,10 +2215,12 @@ function fillDetail(p, animate=true){
 const aboutEl = $('about');
 let aboutIO = null;
 const smooth = (a, b, x) => { x = Math.max(0, Math.min(1, (x-a)/(b-a))); return x*x*(3-2*x); };
-function readPos(){                     // scrollTop at which the closing line sits at the centre of the screen
+let rpCache = null;
+function readPos(){                     // scrollTop at which the closing line sits at the centre of the screen (cached: it only moves on resize)
+  if(rpCache !== null) return rpCache;
   const f = aboutEl.querySelector('.ab-end .ab-l.focus'); if(!f) return Infinity;
   const r = f.getBoundingClientRect(), ar = aboutEl.getBoundingClientRect();
-  return (r.top - ar.top) + aboutEl.scrollTop + r.height/2 - aboutEl.clientHeight/2;
+  return rpCache = (r.top - ar.top) + aboutEl.scrollTop + r.height/2 - aboutEl.clientHeight/2;
 }
 function closingReady(){ const f = aboutEl.querySelector('.ab-end .ab-l.focus'); return !!f && parseFloat(getComputedStyle(f).opacity) > 0.97; }
 const BUFFER_PX = 300;                  // deliberate extra scroll past the closing line before the story lets go
@@ -2239,22 +2257,42 @@ function handoff(){
   if(hoState.done || !hoArmed) return;
   const reopen = !introPending;
   hoState.done = true; hoState.dwell = 0; wheelLock = true; Gate.capOK = false;
-  // 1) the whole story melts into dark night fog (1.5 s), then leaves the layout
+  // the great hole is sized so its photon ring reaches well into the frame; its point is the portal's own size
+  const big = (0.42 * Math.hypot(innerWidth, innerHeight) / 33.6).toFixed(2);
+  // 0 - 0.9 s: the story dissolves and the room goes to pitch black
   aboutWrap.classList.add('leave'); aboutEl.classList.add('leaving');
-  if(reopen) hoAt(300, () => Gate.resetToHole());      // under the opaque veil the spiral is swapped for the quiet hole
-  hoAt(1550, () => { aboutWrap.style.display = 'none'; });
-  // 2) 0.5 s of pure darkness and silence, 3) only then the one-time title and the hole
-  hoAt(2150, () => {
+  aboutEl.style.transition = 'background .9s ease'; aboutEl.style.background = '#000';
+  Sound.warp();
+  hoAt(1000, () => { aboutWrap.style.display = 'none'; if(reopen) Gate.resetToHole(); });   // the spiral is swapped out under the dark
+  // 0.9 - 1.9 s: the great black hole shrinks into a single point; 1.9 - 2.2 s: the point holds
+  // 2.2 s: the point is gone; a dark beat; 2.6 s: the room lifts and the portal is there
+  const hole = document.createElement('div'); hole.className = 'ab-hole';
+  aboutEl.appendChild(hole);
+  hole.animate([
+    { transform:'scale(' + big + ')', opacity:0, offset:0 },
+    { transform:'scale(' + big + ')', opacity:0, offset:0.27 },
+    { transform:'scale(' + big + ')', opacity:1, offset:0.30 },
+    { transform:'scale(0.02)', opacity:1, offset:0.576, easing:'cubic-bezier(.7,0,.3,1)' },
+    { transform:'scale(0.02)', opacity:1, offset:0.667 },
+    { transform:'scale(0.02)', opacity:0, offset:0.68 },
+    { transform:'scale(0.02)', opacity:0, offset:1 }
+  ], { duration:3300, fill:'forwards' });
+  // 2.6 s: the dark room lifts away from the portal
+  hoAt(2600, () => {
     hoArmed = false; introPending = false; aboutOpen = false; aboutEl.classList.remove('open');
     if(aboutIO){ aboutIO.disconnect(); aboutIO = null; }
     Gate.starA = 1;
-    introTitle.className = 'on';
-    Sound.chime();
   });
-  // 4) letters (0.35 s apart, 1.6 s each) + ~3 s hold → 2 s dissolve → gone for good
-  hoAt(2150 + 4*350 + 1600 + 3000, () => { introTitle.classList.add('out'); });
-  hoAt(2150 + 4*350 + 1600 + 3000 + 2000, () => { introTitle.className = 'gone'; Gate.capOK = true; });
-  hoAt(2150 + 4*350 + 1600 + 3000 + 2600, () => { wheelLock = false; });
+  hoAt(4100, () => { aboutEl.style.background = ''; aboutEl.style.transition = ''; hole.remove(); });
+  // the one-time title, then the same slow dissolve as before
+  if(!reopen){
+    hoAt(4000, () => { introTitle.className = 'on'; Sound.chime(); });
+    hoAt(4000 + 4*350 + 1600 + 3000, () => { introTitle.classList.add('out'); });
+    hoAt(4000 + 4*350 + 1600 + 3000 + 2000, () => { introTitle.className = 'gone'; Gate.capOK = true; });
+    hoAt(4000 + 4*350 + 1600 + 3000 + 2600, () => { wheelLock = false; });
+  } else {
+    hoAt(4100, () => { Gate.capOK = true; wheelLock = false; });
+  }
 }
 aboutEl.addEventListener('wheel', e => {
   if(!hoArmed || hoState.done || e.deltaY <= 0) return;
@@ -2263,7 +2301,39 @@ aboutEl.addEventListener('wheel', e => {
     if(++bufferWheels >= 3 && closingReady()) handoff();
   } else bufferWheels = 0;
 }, { passive:true });
-aboutEl.addEventListener('scroll', aboutProgress, { passive:true });
+// prologue-only damped scroll: its own sensitivity and glide
+const proS = { t:0, pos:0, raf:0, last:0 };   // t = where the wheel wants us, pos = where the glide is (kept fractional)
+let proGliding = false;
+function proAdd(dy){
+  if(Math.abs(dy) < SCROLL_TUNE.prologue.dead) return;
+  if(!proS.raf){ proS.pos = aboutEl.scrollTop; proS.t = proS.pos; proS.last = 0; }
+  const max = aboutEl.scrollHeight - aboutEl.clientHeight;
+  proS.t = Math.max(0, Math.min(max, proS.t + dy * SCROLL_TUNE.prologue.sens));
+  if(!proS.raf) proS.raf = requestAnimationFrame(proStep);
+}
+function proStep(now){
+  if(!aboutOpen){ proS.raf = 0; proGliding = false; return; }
+  const dt = proS.last ? Math.min(0.05, (now - proS.last) / 1000) : 1/60; proS.last = now;
+  const d = proS.t - proS.pos;
+  proGliding = true;
+  if(Math.abs(d) < 0.25){ proS.pos = proS.t; aboutEl.scrollTop = proS.pos; proS.raf = 0; proGliding = false; return; }
+  proS.pos += d * (1 - Math.pow(1 - SCROLL_TUNE.prologue.lerp, dt * 60));   // same feel at any refresh rate
+  aboutEl.scrollTop = proS.pos;
+  proS.raf = requestAnimationFrame(proStep);
+}
+aboutEl.addEventListener('wheel', e => {
+  if(!aboutOpen || hoState.done || e.ctrlKey) return;
+  e.preventDefault();
+  let dy = e.deltaY;
+  if(e.deltaMode === 1) dy *= 16; else if(e.deltaMode === 2) dy *= innerHeight;
+  proAdd(dy);
+}, { passive:false });
+let aboutTick = 0;
+aboutEl.addEventListener('scroll', () => {
+  if(aboutTick) return;
+  aboutTick = requestAnimationFrame(() => { aboutTick = 0; aboutProgress(); });   // at most one progress check per frame
+}, { passive:true });
+window.addEventListener('resize', () => { rpCache = null; });
 function openAbout(){
   if(aboutOpen || document.body.classList.contains('in-gallery')) return;
   aboutOpen = true;
