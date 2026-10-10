@@ -37,7 +37,8 @@
 html,body{width:100%;height:100%;overflow:hidden;overscroll-behavior:none;-webkit-text-size-adjust:100%;background:var(--bg);color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased}
 body{cursor:none;user-select:none;-webkit-user-select:none;touch-action:none}
 @media (hover:none){body{cursor:auto}}
-canvas#gl{position:fixed;inset:0;width:100%;height:100%;display:block;outline:none}
+canvas#gl{position:fixed;inset:0;width:100%;height:100%;display:block;outline:none;background:#040508;overflow:hidden}
+html{background:#040508;overflow:hidden}
 button,input,textarea,select{font:inherit;color:inherit}
 input,textarea{user-select:text;-webkit-user-select:text}
 .mono{font-family:var(--mono);letter-spacing:.06em;text-transform:uppercase}
@@ -971,8 +972,8 @@ const Sound = (() => {
 /* =========================================================
    CONSTANTS / RENDERER
    ========================================================= */
-const SPACING = 4.0, SZ = 0, ANG_STEP = Math.PI/3, PANEL_R = 5.6, CAM_R = 13, HELIX_R = 2.1;
-const CAMOFF = -0.62, XOFF = 4.9, CAMD = 13.5, TILT = 0.115;                     // staircase: sideways offset, camera distance, ~6.5° card tilt
+const SPACING = 4.0, SZ = 0, ANG_STEP = Math.PI/3, PANEL_R = 3.4, CAM_R = 9.4, HELIX_R = 2.1;   // radius cut ~40%: works wrap the particle vortex instead of hugging the frame
+const CAMOFF = -0.3, XOFF = 4.9, CAMD = 13.5, TILT = 0.115;                     // staircase: sideways offset, camera distance, ~6.5° card tilt
 const PATH_LEN = Math.hypot(SPACING, SZ), PATH_ANG = Math.atan2(SZ, SPACING);
 const PW = 4.4, PH = 3.0, MARGIN = 0.55, TWIST = 0.42;
 const isTouch = matchMedia('(hover:none)').matches;
@@ -1199,7 +1200,7 @@ const panelVS = `
   }`;
 const panelFS = `
   ${GLSL_COMMON}
-  uniform sampler2D uMap; uniform float uHasMap, uImgAspect, uHover, uTime, uGlitch, uReveal, uSeed, uActive, uFit;
+  uniform sampler2D uMap; uniform float uHasMap, uImgAspect, uHover, uTime, uGlitch, uReveal, uSeed, uActive, uFit, uFade;
   uniform vec2 uSize; uniform float uMargin, uRadius; uniform vec3 uRim, uGlowCol;
   uniform vec2 uCoreDir; uniform float uCoreK;                 // direction (in the panel plane) toward the particle core
   varying vec2 vUv; varying vec3 vN; varying vec3 vV;
@@ -1328,7 +1329,7 @@ const panelFS = `
     float aPlate = inside*mix(0.97, 0.62, gl)*vis;
     float aCut = clamp(max(aC, halo*0.5), 0.0, 1.0) * mix(0.98, 0.9, gl) * inside;
     float a = mix(aPlate, aCut, uHasMap);
-    gl_FragColor = vec4(c, clamp(a, 0.0, 1.0));
+    gl_FragColor = vec4(c*uFade, clamp(a, 0.0, 1.0)*uFade);   // depth/edge fade: dissolves into the dark instead of clipping
   }`;
 
 /* ---------- BACKLIGHT GLOW: soft light spilling from behind each artwork ---------- */
@@ -1516,7 +1517,7 @@ function createPanel(item){
     uSize:{value:new THREE.Vector2(PW,PH)}, uMargin:{value:MARGIN}, uRadius:{value:0.3},
     uRim:{value:new THREE.Color(RIMS[seedCounter%3])},
     uFit:{value: item.fit === 'contain' ? 1 : 0}, uGlowCol:{value:new THREE.Color(RIMS[seedCounter%3])},
-    uCoreDir:{value:new THREE.Vector2(0, 1)}, uCoreK:{value:1}
+    uCoreDir:{value:new THREE.Vector2(0, 1)}, uCoreK:{value:1}, uFade:{value:1}
   };
   const front = new THREE.Mesh(frontGeo, new THREE.ShaderMaterial({ uniforms, vertexShader:panelVS, fragmentShader:panelFS, transparent:true, depthWrite:false }));
   front.position.z = 0.012; front.renderOrder = 2; inner.add(front);
@@ -1993,6 +1994,15 @@ const blocking = () => drawerOpen || pinOpen || videoOpen || aboutOpen;
    We classify per-event, scale accordingly, clamp each event, cap per-frame travel,
    and gently snap to the nearest artwork once the gesture has fully settled. */
 const Wheel = { snapTimer:null, lastT:0, trackpad:IS_MAC, dir:1 };
+// soft snap: once input has settled, glide to the artwork nearest the current position with a long ease-out
+function softSnap(delay){
+  clearTimeout(Wheel.snapTimer);
+  Wheel.snapTimer = setTimeout(() => {
+    const snap = Math.round(state.target);
+    gsap.to(state, { target:clampT(Math.max(0, Math.min(count()-1, snap))), duration:1.25, ease:'power2.out', overwrite:'auto' });
+    gsap.to(state, { orbitT:0, duration:2.2, ease:'power2.inOut' });
+  }, delay);
+}
 addEventListener('wheel', e => {
   if(e.target.closest && e.target.closest('#drawer, #caption, #pinWrap, #story, #video, #about')) return;
   if(blocking()) return;
@@ -2010,7 +2020,7 @@ addEventListener('wheel', e => {
   if(detailOpen){ if(Math.abs(dy) < 4 && Math.abs(dx) < 4) return; closeDetail(false, 0.9); }   // scroll leaves the focus view AND scrolls at once
   // ignore the near-zero creep at the end of macOS inertial scrolling
   if(looksTrackpad && Math.abs(dy) < 1.2 && Math.abs(dx) < 1.2) return;
-  const k = looksTrackpad ? 0.0018 : 0.0024;     // panels per px (≈1 panel per short swipe / ~4 wheel notches)
+  const k = looksTrackpad ? 0.0012 : 0.0016;     // panels per px: slower travel, so the eye can follow each work
   let step = Math.max(-100, Math.min(100, dy)) * k;  // clamp spikes
   // lead cap: the target may never run more than N artworks ahead of the camera,
   // so a long inertial flick can't fling through the whole helix (frame-rate independent)
@@ -2020,18 +2030,14 @@ addEventListener('wheel', e => {
   hideHint();
   clearTimeout(Wheel.snapTimer);
   if(step) Wheel.dir = Math.sign(step);
-  Wheel.snapTimer = setTimeout(() => {
-    // settle on an artwork in the direction of travel (tiny nudges stay put)
-    const t = state.target, snap = Wheel.dir > 0 ? Math.ceil(t - 0.15) : Math.floor(t + 0.15);
-    gsap.to(state, { target:clampT(Math.max(0, Math.min(count()-1, snap))), duration:.9, ease:'power3.out', overwrite:'auto' });
-    gsap.to(state, { orbitT:0, duration:2.2, ease:'power2.inOut' });
-  }, looksTrackpad ? 260 : 180);
+  softSnap(looksTrackpad ? 300 : 200);
 }, { passive:false });
 // Safari: block native pinch-zoom gestures on the canvas
 ['gesturestart','gesturechange','gestureend'].forEach(t => document.addEventListener(t, e => e.preventDefault(), { passive:false }));
 
 canvas.addEventListener('pointerdown', e => {
   if(blocking() || Gate.active || Gate.running) return;
+  clearTimeout(Wheel.snapTimer);
   dragging = true; moved = 0; lastX = e.clientX; lastY = e.clientY;
   canvas.setPointerCapture(e.pointerId);
 });
@@ -2056,6 +2062,7 @@ addEventListener('pointermove', e => {
 addEventListener('pointerup', e => {
   if(!dragging) return;
   dragging = false; ui.cursor.classList.remove('drag');
+  if(moved > 6 && !detailOpen) softSnap(260);                   // releasing a drag settles on the nearest work
   if(moved < 8 && e.target === canvas){
     if(e.pointerType === 'touch'){ state.mx = (e.clientX/innerWidth)*2-1; state.my = -(e.clientY/innerHeight)*2+1; mouse.set(state.mx,state.my); }
     const hit = pick();
@@ -2111,6 +2118,7 @@ addEventListener('keydown', e => {
 $('kbdHint').innerHTML = `<span><b>${MOD} K</b>검색</span><span><b>${MOD} E</b>관리자</span><span><b>${MOD} S</b>저장</span><span><b>ESC</b>닫기</span><span><b>M</b>사운드</span><span><b>← →</b>이동</span>`;
 
 const ray = new THREE.Raycaster();
+const _hitP = new THREE.Vector3();
 function pick(){
   ray.setFromCamera(mouse, camera);
   const hits = ray.intersectObjects(panels.map(p => p.front), false);
@@ -2118,7 +2126,23 @@ function pick(){
     const u = h.uv, lx = (u.x-0.5)*(PW+MARGIN*2), ly = (u.y-0.5)*(PH+MARGIN*2);
     if(Math.abs(lx) <= PW/2 && Math.abs(ly) <= PH/2){ const p = h.object.userData.panel; p.hitUV = u; return p; }
   }
-  return null;
+  // invisible hitbox: a generous screen-space halo, 1.8x the work's half-diagonal, so near-misses still open the work
+  const mx = (mouse.x*0.5+0.5)*innerWidth, my = (-mouse.y*0.5+0.5)*innerHeight;
+  const halfDiag = Math.hypot(PW, PH)/2, tanH = Math.tan(camera.fov*Math.PI/360);
+  let best = null, bestD = Infinity;
+  for(const p of panels){
+    if(p.anchor.scale.x < 0.5) continue;
+    p.front.getWorldPosition(_hitP);
+    const dist = camera.position.distanceTo(_hitP);
+    _hitP.project(camera);
+    if(_hitP.z > 1 || dist < 0.01) continue;
+    const sx = (_hitP.x*0.5+0.5)*innerWidth, sy = (-_hitP.y*0.5+0.5)*innerHeight;
+    const pxPerUnit = (innerHeight/2)/(tanH*dist);
+    const R = 1.8*halfDiag*pxPerUnit;
+    if(Math.hypot(mx-sx, my-sy) < R && dist < bestD){ best = p; bestD = dist; }
+  }
+  if(best) best.hitUV = null;
+  return best;
 }
 let hintHidden = false;
 function hideHint(){ if(hintHidden) return; hintHidden = true; ui.hint.style.opacity = 0; }
@@ -3032,7 +3056,7 @@ function tick(){
   if(!Gate.active && !Gate.running && !detailOpen && count() && state.cur > count()-1+0.8) Gate.exit();
   const prev = state.cur;
   // softer follow for trackpads (their own inertia already smooths input) → no double-momentum overshoot
-  const follow = 1 - Math.pow(1 - 0.08, dt*60);                 // current += (target − current) × 0.08, frame-rate independent
+  const follow = 1 - Math.pow(1 - 0.05, dt*60);                 // current += (target − current) × 0.05: a slow, gliding ease, frame-rate independent
   state.cur += (state.target - state.cur) * follow;
   state.vel = state.cur - prev;
   state.orbit += (state.orbitT - state.orbit) * kSlow;
@@ -3075,6 +3099,7 @@ function tick(){
   if(h !== hovered){
     if(h){ gsap.fromTo(h.lu.uGlitch, {value:.7}, {value:0, duration:.6}); Sound.tick(); }
     hovered = h;
+    canvas.style.cursor = h ? 'pointer' : '';                 // pointer over a work, custom ring elsewhere
     if(!dragging){ ui.cursor.classList.toggle('view', !!h); ui.cursorTxt.textContent = (h && state.focusP !== h) ? 'VIEW' : 'DRAG'; }
   }
 
@@ -3106,10 +3131,19 @@ function tick(){
     { const sc = 1 - (fpValid ? state.focus : 0)*(1-active)*0.999; p.anchor.scale.setScalar(sc); }
     p.inner.rotation.y = p.tiltY*(1-active) + Math.cos(t*0.5 + i*1.3)*0.04*(1-active);
     p.inner.position.z = p.hover*0.55*(1-active);
+    p.inner.scale.setScalar(1 + 0.035*p.hover*(1-active));   // subtle lift on hover
     // idle floating: slow, layered vertical breathing like an object suspended in deep water
     p.inner.position.y = (Math.sin(t*0.7 + i*0.9)*0.16 + Math.sin(t*0.29 + i*2.3)*0.07)*(1-active);
     p.lu.uAlpha.value = THREE.MathUtils.clamp(1.4 - Math.abs(i - state.cur)*0.55, 0.15, 1) * (1 - active);
     p.gu.uAlpha.value = THREE.MathUtils.clamp(1.6 - Math.abs(i - state.cur)*0.45, 0.35, 1);
+    // atmospheric fade: a work dissolves as it nears the top/bottom of the frame or drifts far into the dark
+    { p.front.getWorldPosition(_tmpW); const dist = camera.position.distanceTo(_tmpW);
+      _tmpW.project(camera);
+      const yF = _tmpW.z > 1 ? 0 : 1 - THREE.MathUtils.smoothstep(Math.abs(_tmpW.y), 0.6, 1.02);
+      const dF = 1 - THREE.MathUtils.smoothstep(dist, 15, 24);
+      const goal = Math.min(yF, dF), cur = p.fade ?? 1;
+      p.fade = cur + (goal - cur) * Math.min(1, k*0.9);
+      p.uniforms.uFade.value = p.fade; p.gu.uAlpha.value *= p.fade; p.lu.uAlpha.value *= p.fade; }
     if(Math.random() < 0.0016) gsap.fromTo(p.lu.uGlitch, {value:.8},{value:0,duration:.4});
   });
 
