@@ -2065,8 +2065,11 @@ addEventListener('pointerup', e => {
   if(moved > 6 && !detailOpen) softSnap(260);                   // releasing a drag settles on the nearest work
   if(moved < 8 && e.target === canvas){
     if(e.pointerType === 'touch'){ state.mx = (e.clientX/innerWidth)*2-1; state.my = -(e.clientY/innerHeight)*2+1; mouse.set(state.mx,state.my); }
-    const hit = pick();
-    if(hit) openDetail(hit); else if(detailOpen) closeDetail();
+    const hit = pick(!detailOpen);                           // while a work is open, only its own surface counts as a hit
+    if(hit && detailOpen && hit === state.focusP) setStory(!storyOpen);   // clicking the open work toggles its story
+    else if(hit) openDetail(hit);
+    else if(detailOpen) closeDetail(false, 0.9);             // empty space: glide back to the scroll pose, same as scrolling
+    else if(storyOpen) setStory(false);
   }
   gsap.killTweensOf(state, 'orbitT');
   if(!detailOpen) gsap.to(state, { orbitT:0, duration:2.6, delay:1.2, ease:'power2.inOut' });
@@ -2119,13 +2122,51 @@ $('kbdHint').innerHTML = `<span><b>${MOD} K</b>검색</span><span><b>${MOD} E</b
 
 const ray = new THREE.Raycaster();
 const _hitP = new THREE.Vector3();
-function pick(){
+// alpha of the work's own pixels, sampled once per texture (same UV mapping as panelFS)
+function artAlpha(p){
+  if(p.alphaSrc === p.texture) return p.alphaGrid;
+  p.alphaSrc = p.texture; p.alphaGrid = null;
+  try{
+    const img = p.texture && p.texture.image; if(!img) return null;
+    const iw = img.width || img.naturalWidth, ih = img.height || img.naturalHeight;
+    const w = 160, h = Math.max(1, Math.round(160*ih/iw));
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    const cx = c.getContext('2d', { willReadFrequently:true }); cx.drawImage(img, 0, 0, w, h);
+    const d = cx.getImageData(0, 0, w, h).data, A = new Float32Array(w*h);
+    for(let i = 0; i < w*h; i++) A[i] = d[i*4+3]/255;
+    p.alphaGrid = { A, w, h };
+  }catch(e){ p.alphaGrid = null; }                              // tainted/unavailable: fall back to the rectangle
+  return p.alphaGrid;
+}
+// is this point on the plane (plane units) actually the artwork, not the transparent void around it?
+function inWork(p, lx, ly){
+  if(p.uniforms.uHasMap.value < 0.5) return true;
+  const g = artAlpha(p); if(!g) return true;
+  const aspect = p.uniforms.uImgAspect.value, pa = PW/PH, fit = p.uniforms.uFit.value;
+  const cov = aspect > pa ? [pa/aspect, 1] : [1, aspect/pa];
+  const con = aspect > pa ? [1, aspect/pa] : [pa/aspect, 1];
+  const pad = 1 + 0.14*fit, hs = 1 - 0.05*p.hover;
+  const sx = (cov[0] + (con[0]*pad - cov[0])*fit), sy = (cov[1] + (con[1]*pad - cov[1])*fit);
+  const iu = lx/PW + 0.5, iv = ly/PH + 0.5;
+  const tu = (iu-0.5)*sx*hs + 0.5, tv = (iv-0.5)*sy*hs + 0.5;
+  if(tu < 0 || tu > 1 || tv < 0 || tv > 1) return false;
+  const cx = Math.round(tu*(g.w-1)), cy = Math.round((1-tv)*(g.h-1));   // flipY: row 0 is the image bottom
+  let best = 0;
+  for(let dy = -2; dy <= 2; dy++) for(let dx = -2; dx <= 2; dx++){
+    const x = cx+dx, y = cy+dy; if(x < 0 || y < 0 || x >= g.w || y >= g.h) continue;
+    best = Math.max(best, g.A[y*g.w + x]);
+  }
+  return best > 0.25;                                             // forgiving: a few pixels of the silhouette count
+}
+function pick(loose = true){
   ray.setFromCamera(mouse, camera);
   const hits = ray.intersectObjects(panels.map(p => p.front), false);
   for(const h of hits){
     const u = h.uv, lx = (u.x-0.5)*(PW+MARGIN*2), ly = (u.y-0.5)*(PH+MARGIN*2);
-    if(Math.abs(lx) <= PW/2 && Math.abs(ly) <= PH/2){ const p = h.object.userData.panel; p.hitUV = u; return p; }
+    const p = h.object.userData.panel;
+    if(Math.abs(lx) <= PW/2 && Math.abs(ly) <= PH/2 && inWork(p, lx, ly)){ p.hitUV = u; return p; }
   }
+  if(!loose) return null;
   // invisible hitbox: a generous screen-space halo, 1.8x the work's half-diagonal, so near-misses still open the work
   const mx = (mouse.x*0.5+0.5)*innerWidth, my = (-mouse.y*0.5+0.5)*innerHeight;
   const halfDiag = Math.hypot(PW, PH)/2, tanH = Math.tan(camera.fov*Math.PI/360);
@@ -3094,13 +3135,17 @@ function tick(){
   let h = null;
   if(!Gate.active && !dragging && !blocking() && !isTouch){
     const el = document.elementFromPoint(px, py);
-    if(el === canvas) h = pick();
+    if(el === canvas) h = pick(!detailOpen);
   }
   if(h !== hovered){
     if(h){ gsap.fromTo(h.lu.uGlitch, {value:.7}, {value:0, duration:.6}); Sound.tick(); }
     hovered = h;
     canvas.style.cursor = h ? 'pointer' : '';                 // pointer over a work, custom ring elsewhere
-    if(!dragging){ ui.cursor.classList.toggle('view', !!h); ui.cursorTxt.textContent = (h && state.focusP !== h) ? 'VIEW' : 'DRAG'; }
+  }
+  if(!dragging){                                              // light action hint: SELECT on a work, READ on the open one, CLOSE on empty space
+    ui.cursor.classList.toggle('view', !!h);
+    const label = h ? (state.focusP === h ? 'READ' : 'SELECT') : (detailOpen ? 'CLOSE' : 'DRAG');
+    if(ui.cursorTxt.textContent !== label) ui.cursorTxt.textContent = label;
   }
 
   // the particle light gathers toward the work being hovered (or opened)
