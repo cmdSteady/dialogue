@@ -960,7 +960,7 @@ const Sound = (() => {
 /* =========================================================
    CONSTANTS / RENDERER
    ========================================================= */
-const SPACING = 4.0, SZ = 0, ANG_STEP = Math.PI/3, PANEL_R = 3.4, CAM_R = 9.4, HELIX_R = 2.1;   // radius cut ~40%: works wrap the particle vortex instead of hugging the frame
+const SPACING = 4.0, SZ = 0, ANG_STEP = Math.PI/3, PANEL_R = 3.4, CAM_R = 11.2, HELIX_R = 2.1;   // radius cut ~40%: works wrap the particle vortex instead of hugging the frame
 const CAMOFF = -0.3, XOFF = 4.9, CAMD = 13.5, TILT = 0.115;                     // staircase: sideways offset, camera distance, ~6.5° card tilt
 const PATH_LEN = Math.hypot(SPACING, SZ), PATH_ANG = Math.atan2(SZ, SPACING);
 const PW = 4.4, PH = 3.0, MARGIN = 0.55, TWIST = 0.42;
@@ -1206,7 +1206,7 @@ const panelFS = `
     else               { scCover.y = uImgAspect/pa; scContain.x = pa/uImgAspect; }
     float pad = mix(1.0, 1.14, uFit);                       // breathing room around a contained work
     vec2 sc = mix(scCover, scContain * pad, uFit);
-    vec2 tuv = (iuv-0.5)*sc*(1.0-0.05*uHover) + 0.5;
+    vec2 tuv = (iuv-0.5)*sc*(1.0-0.02*uHover) + 0.5;
 
     float slice = floor(iuv.y*28.0);
     float gn = hash(vec2(slice + uSeed, floor(uTime*18.0)));
@@ -2133,7 +2133,7 @@ function inWork(p, lx, ly){
   const aspect = p.uniforms.uImgAspect.value, pa = PW/PH, fit = p.uniforms.uFit.value;
   const cov = aspect > pa ? [pa/aspect, 1] : [1, aspect/pa];
   const con = aspect > pa ? [1, aspect/pa] : [pa/aspect, 1];
-  const pad = 1 + 0.14*fit, hs = 1 - 0.05*p.hover;
+  const pad = 1 + 0.14*fit, hs = 1 - 0.02*p.hover;
   const sx = (cov[0] + (con[0]*pad - cov[0])*fit), sy = (cov[1] + (con[1]*pad - cov[1])*fit);
   const iu = lx/PW + 0.5, iv = ly/PH + 0.5;
   const tu = (iu-0.5)*sx*hs + 0.5, tv = (iv-0.5)*sy*hs + 0.5;
@@ -2167,7 +2167,7 @@ function pick(loose = true){
     if(_hitP.z > 1 || dist < 0.01) continue;
     const sx = (_hitP.x*0.5+0.5)*innerWidth, sy = (-_hitP.y*0.5+0.5)*innerHeight;
     const pxPerUnit = (innerHeight/2)/(tanH*dist);
-    const R = 1.8*halfDiag*pxPerUnit;
+    const R = 1.15*halfDiag*pxPerUnit;                             // tighter than before: a near-miss, not a whole-screen zone
     if(Math.hypot(mx-sx, my-sy) < R && dist < bestD){ best = p; bestD = dist; }
   }
   if(best) best.hitUV = null;
@@ -3123,7 +3123,8 @@ function tick(){
   let h = null;
   if(!Gate.active && !dragging && !blocking() && !isTouch){
     const el = document.elementFromPoint(px, py);
-    if(el === canvas) h = pick(!detailOpen);
+    const settling = performance.now() - Wheel.lastT < 380;      // no hover while the spiral is still moving
+    if(el === canvas && !settling) h = pick(!detailOpen);
   }
   if(h !== hovered){
     if(h){ gsap.fromTo(h.lu.uGlitch, {value:.7}, {value:0, duration:.6}); Sound.tick(); }
@@ -3163,8 +3164,8 @@ function tick(){
     p.inner.rotation.z = p.jz*(1-active) + Math.sin(t*0.41 + i*1.7)*0.012*(1-active);   // idle: barely-there sway
     { const sc = 1 - (fpValid ? state.focus : 0)*(1-active)*0.999; p.anchor.scale.setScalar(sc); }
     p.inner.rotation.y = p.tiltY*(1-active) + Math.cos(t*0.5 + i*1.3)*0.04*(1-active);
-    p.inner.position.z = p.hover*0.55*(1-active);
-    p.inner.scale.setScalar(1 + 0.035*p.hover*(1-active));   // subtle lift on hover
+    p.inner.position.z = p.hover*0.2*(1-active);
+    p.inner.scale.setScalar(1 + 0.012*p.hover*(1-active));   // barely-there lift on hover, no visible growth
     // idle floating: slow, layered vertical breathing like an object suspended in deep water
     p.inner.position.y = (Math.sin(t*0.7 + i*0.9)*0.16 + Math.sin(t*0.29 + i*2.3)*0.07)*(1-active);
     p.lu.uAlpha.value = THREE.MathUtils.clamp(1.4 - Math.abs(i - state.cur)*0.55, 0.15, 1) * (1 - active);
