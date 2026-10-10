@@ -1247,7 +1247,7 @@ const panelFS = `
     float gl = (1.0 - uActive) * (1.0 - 0.3*uHover);                // 1 = frosted translucent glass (browsing), 0 = clear (opened)
     float brightW = smoothstep(0.35, 0.8, lum);                       // pale works: less frost lift so the carving survives
     // frost only on the work itself (cut-outs), so the void around it stays black
-    col = mix(col, col*(0.62 - 0.08*brightW) + vec3(0.47,0.49,0.58)*0.46*(1.0 - 0.55*brightW), gl*0.85*mix(1.0, t4.a, uHasMap));
+    col = mix(col, col*(0.62 - 0.08*brightW) + vec3(0.47,0.49,0.58)*0.46*(1.0 - 0.55*brightW), gl*0.85*mix(1.0, t4.a*0.5, uHasMap));
     float lumB = dot(col, vec3(0.333));
     col = col / (1.0 + 0.30*lumB);                                // soft highlight roll-off (no bloom blow-out)
     col *= 1.0 - 0.22*smoothstep(0.38, 0.8, lumB);                // pale works (white porcelain, crystal, celadon) keep their carving
@@ -1274,30 +1274,39 @@ const panelFS = `
     float outer = exp(-max(d,0.0)*7.5) * (1.0-inside);
     float energy = 0.3 + 0.8*uHover + 0.45*fres + 0.45*uActive;
     rimC = mix(rimC, vec3(0.80,0.84,0.95), gl*0.55);
-    vec3 rim = rimC * line * 0.05 * energy;
-    // particle rim light: the glow of the helix core catches the edge of the work that faces it
+    vec3 rim = vec3(0.0);                                             // no hard frame line
+    // ── soft light from the particle core: no hard outline, only a feathered wrap and an aerosol bloom
     vec2 nrm;
     { vec2 qq = abs(p) - uSize*0.5 + uRadius;
       nrm = (qq.x > 0.0 || qq.y > 0.0) ? normalize(max(qq, 0.0))*sign(p) : (qq.x > qq.y ? vec2(sign(p.x), 0.0) : vec2(0.0, sign(p.y))); }
     float facing = max(dot(nrm, uCoreDir), 0.0);
-    float rimBand = smoothstep(0.035, 0.0, abs(d + 0.006)) + 0.45*exp(-max(d, 0.0)*14.0)*(1.0 - inside);
-    vec3 coreC = mix(vec3(0.46, 1.0, 0.88), vec3(0.97, 0.90, 0.74), smoothstep(0.6, 1.0, facing));
-    // silhouette rim: the outline of a cut-out work that faces the core catches its light
-    float sx = texture2D(uMap, tuv + vec2(0.005, 0.0)).a - texture2D(uMap, tuv - vec2(0.005, 0.0)).a;
-    float sy = texture2D(uMap, tuv + vec2(0.0, 0.005)).a - texture2D(uMap, tuv - vec2(0.0, 0.005)).a;
-    vec2 sg = vec2(sx, sy); float sgl = length(sg);
-    vec2 sN = -sg / (sgl + 1e-4);                                   // outward normal of the silhouette
-    float sFacing = max(dot(sN, uCoreDir), 0.0);
-    float silRim = smoothstep(0.05, 0.5, sgl) * pow(sFacing, 2.0) * uHasMap * (1.0 - 0.6*gl);
-    vec3 coreRim = coreC * (pow(facing, 2.2) * rimBand * 0.5 + silRim * 0.85) * uCoreK;
-    vec3 c = col*inside + rim + rimC*outer*(0.02 + 0.1*uHover + 0.06*uActive) + coreRim;
+    // silhouette of a cut-out, read from a blurred alpha (mip bias) so no pixel stair-steps appear
+    float aC  = t4.a;
+    float aB2 = texture2D(uMap, tuv, 5.5).a;                          // wide blur → aerosol
+    vec2 gS = vec2(texture2D(uMap, tuv + vec2(0.012, 0.0), 3.0).a - texture2D(uMap, tuv - vec2(0.012, 0.0), 3.0).a,
+                   texture2D(uMap, tuv + vec2(0.0, 0.012), 3.0).a - texture2D(uMap, tuv - vec2(0.0, 0.012), 3.0).a);
+    float gMag = length(gS);
+    vec2 sN2 = -gS / (gMag + 1e-4);                                   // outward normal of the silhouette
+    float wrap = smoothstep(-0.35, 0.8, dot(sN2, uCoreDir));          // soft wrap-around light on the core side
+    float edgeSoft = smoothstep(0.02, 0.35, gMag) * uHasMap;          // feathered edge zone, no line
+    float halo = clamp(aB2 - aC, 0.0, 1.0) * uHasMap * (0.35 + 0.65*facing);   // aerosol just outside the work
+    // muted museum light: deep teal → jade → a touch of moonlight (no neon)
+    vec3 coreA = mix(vec3(0.16, 0.40, 0.38), vec3(0.50, 0.74, 0.64), smoothstep(0.2, 0.9, facing));
+    coreA = mix(coreA, vec3(0.80, 0.85, 0.88), smoothstep(0.75, 1.0, facing)*0.35);
+    float strength = uCoreK * (1.0 - 0.6*gl);
+    vec3 coreRim = coreA * (edgeSoft*wrap*0.40 + halo*0.26) * strength;
+    float shade = mix(1.0, 0.76 + 0.30*wrap, uHasMap);                // sculpted light/shadow across the work
+    vec3 c = col*inside*shade + coreRim;
     vec2 rq = (iuv - 0.5) * 2.0;
     float rr = length(rq * vec2(0.97, 0.93));
     float plateK = 1.0 - smoothstep(0.50, 0.98, rr);                              // soft elliptical falloff of the stage plate
     float eD2 = min(min(tuv.x, 1.0 - tuv.x), min(tuv.y, 1.0 - tuv.y));
     float artM = t4.a * mix(1.0, inArt*smoothstep(0.0, 0.05, eD2), uFit);        // the work itself stays fully opaque
     float vis = mix(1.0 - smoothstep(0.68, 1.02, rr), max(plateK, artM), uFit);
-    float a = inside*mix(0.97, 0.62, gl)*vis + line*0.02*(0.4 + uHover) + outer*(0.03 + 0.12*uHover + 0.08*uActive);
+    // cut-outs: the void around the work is fully transparent (no card, no plate, no box shadow)
+    float aPlate = inside*mix(0.97, 0.62, gl)*vis;
+    float aCut = clamp(max(aC, halo*0.5), 0.0, 1.0) * mix(0.98, 0.9, gl) * inside;
+    float a = mix(aPlate, aCut, uHasMap);
     gl_FragColor = vec4(c, clamp(a, 0.0, 1.0));
   }`;
 
@@ -1473,7 +1482,7 @@ function updateVines(p, t){
   pos.needsUpdate = true; al.needsUpdate = true;
 }
 
-const RIMS = [0x2fae92, 0xd8c7a5, 0xe8eef5];
+const RIMS = [0x2c6f68, 0x8fb8a4, 0xd9e2e6];   // deep teal · jade · moonlight (museum tones, not neon)
 let seedCounter = 0;
 function createPanel(item){
   const anchor = new THREE.Group(); anchor.rotation.order = 'YXZ'; scene.add(anchor);
