@@ -939,12 +939,15 @@ const Sound = (() => {
   // The music is always on and starts with the prologue. Browsers only allow sound after a user gesture, so we
   // try immediately at load and then retry on every possible first interaction (scroll, wheel, touch, key, click).
   function begin(){
-    if(on || muted) return;
-    try{ if(!ctx) init(); if(ctx.state === 'suspended') ctx.resume().catch(() => {}); }catch(e){ return; }
-    setOn(true).catch(() => {});   // no latch: a pending resume must never block the next attempt
+    if(muted) return;
+    try{ if(!ctx) init(); }catch(e){ return; }
+    // every gesture retries the resume, even after `on` is already set: a resume left pending at load must not block the music
+    if(ctx.state !== 'running') ctx.resume().catch(() => {});
+    if(!on) setOn(true).catch(() => {});   // sets on, fades in, and starts the music once it is decoded
+    else if(!musicSrc && ambBuf) startMusic();
   }
   ['pointerdown','touchend','keydown'].forEach(t => addEventListener(t, unlock, { capture:true, passive:true }));
-  ['pointerdown','pointerup','mousedown','click','touchstart','touchend','keydown','wheel','scroll'].forEach(t => addEventListener(t, begin, { capture:true, passive:true }));
+  ['pointerdown','pointerup','mousedown','click','touchstart','touchmove','touchend','keydown','wheel','scroll'].forEach(t => addEventListener(t, begin, { capture:true, passive:true }));
   function ramp(param, to, sec){
     const t = ctx.currentTime;
     param.cancelScheduledValues(t); param.setValueAtTime(param.value, t); param.linearRampToValueAtTime(to, t + sec);
