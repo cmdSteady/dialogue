@@ -928,13 +928,10 @@ const Sound = (() => {
   }
   // The music is always on and starts with the prologue. Browsers only allow sound after a user gesture, so we
   // try immediately at load and then retry on every possible first interaction (scroll, wheel, touch, key, click).
-  let starting = false;
   function begin(){
     if(on || muted) return;
     try{ if(!ctx) init(); if(ctx.state === 'suspended') ctx.resume().catch(() => {}); }catch(e){ return; }
-    if(starting) return;
-    starting = true;
-    setOn(true).then(() => { starting = false; }, () => { starting = false; });
+    setOn(true).catch(() => {});   // no latch: a pending resume must never block the next attempt
   }
   ['pointerdown','touchend','keydown'].forEach(t => addEventListener(t, unlock, { capture:true, passive:true }));
   ['pointerdown','pointerup','mousedown','click','touchstart','touchend','keydown','wheel','scroll'].forEach(t => addEventListener(t, begin, { capture:true, passive:true }));
@@ -945,7 +942,7 @@ const Sound = (() => {
   async function setOn(v, sec){
     muted = !v;
     if(!ctx) init();
-    if(ctx.state === 'suspended') await ctx.resume();
+    if(ctx.state === 'suspended') ctx.resume().catch(() => {});   // never await: iOS can leave resume() pending until a real gesture
     on = v;
     if(on){ try{ await ambReady; }catch(e){} startMusic(); }
     ramp(droneFade.gain, on ? 1 : 0, sec || (on ? 0.6 : 1.0));          // 0.6 s fade-in at start · 1 s fade-out; the M key uses 1.2 s both ways
@@ -1297,15 +1294,15 @@ const panelFS = `
     float pa = uSize.x/uSize.y;
 
     // fit: cover (fill frame) ↔ contain (whole artwork inside the frame with a mat)
-    vec2 scCover = vec2(1.0), scContain = vec2(1.0);
-    if(uImgAspect > pa){ scCover.x = pa/uImgAspect; scContain.y = uImgAspect/pa; }
-    else               { scCover.y = uImgAspect/pa; scContain.x = pa/uImgAspect; }
-    // contained works: the picture covers the same share (70%) of the frame area for every proportion, so the set reads even
+    // Both fit states are described by the picture's HEIGHT share of the frame; its width follows from the image aspect,
+    // so every blend between them keeps the true proportion (no squeeze while the fit animates).
+    // cover: fill the frame, cropping the overflow.  contain: 70% of the frame area, same share for every proportion.
     float fwR = sqrt(0.70*uImgAspect/pa), fhR = sqrt(0.70*pa/uImgAspect);
-    float kR = min(1.0, 0.92/max(fwR, fhR));                 // one shared factor: clamp never breaks the image's aspect
-    float fwA = fwR*kR, fhA = fhR*kR;
-    vec2 scArea = vec2(1.0/fwA, 1.0/fhA);
-    vec2 sc = mix(scCover, scArea, uFit);
+    float kR = min(1.0, 0.92/max(fwR, fhR));                 // one shared factor: the 92% cap never breaks the aspect
+    float hContain = fhR*kR;
+    float hCover = max(1.0, pa/uImgAspect);
+    float hShare = mix(hCover, hContain, uFit);
+    vec2 sc = vec2(1.0/(hShare*uImgAspect/pa), 1.0/hShare);
     vec2 tuv = (iuv-0.5)*sc*(1.0-0.02*uHover) + 0.5;
 
     float slice = floor(iuv.y*28.0);
@@ -2200,7 +2197,6 @@ addEventListener('keydown', e => {
     return;
   }
   if(pinOpen){ handlePinKey(e); return; }
-  if(!typing && !mod && !e.altKey && (e.key === 'm' || e.key === 'M')){ e.preventDefault(); Sound.toggle().then(showAudioHud); return; }
   if(Gate.running && !Gate.active) return;
   if(aboutOpen) return;
   if(Gate.active && !aboutOpen && !typing && !e.metaKey && !e.ctrlKey && !e.altKey && !drawerOpen){
@@ -2249,11 +2245,12 @@ function inWork(p, lx, ly){
   if(p.uniforms.uHasMap.value < 0.5) return true;
   const g = artAlpha(p); if(!g) return true;
   const aspect = p.uniforms.uImgAspect.value, pa = PW/PH, fit = p.uniforms.uFit.value;
-  const cov = aspect > pa ? [pa/aspect, 1] : [1, aspect/pa];
+  // same rule as the shader: blend the height share, the width follows the image aspect
   const fwR = Math.sqrt(0.70*aspect/pa), fhR = Math.sqrt(0.70*pa/aspect), kR = Math.min(1, 0.92/Math.max(fwR, fhR));
-  const fwA = fwR*kR, fhA = fhR*kR;   // same area rule as the shader: one shared factor keeps the aspect
+  const hContain = fhR*kR, hCover = Math.max(1, pa/aspect);
+  const hShare = hCover + (hContain - hCover)*fit;
+  const sx = 1/(hShare*aspect/pa), sy = 1/hShare;
   const hs = 1 - 0.02*p.hover;
-  const sx = cov[0] + (1/fwA - cov[0])*fit, sy = cov[1] + (1/fhA - cov[1])*fit;
   const iu = lx/PW + 0.5, iv = ly/PH + 0.5;
   const tu = (iu-0.5)*sx*hs + 0.5, tv = (iv-0.5)*sy*hs + 0.5;
   if(tu < 0 || tu > 1 || tv < 0 || tv > 1) return false;
@@ -2916,10 +2913,15 @@ function syncPixelRatio(){
   const on = () => { syncPixelRatio(); watchDPR(); };
   mq.addEventListener ? mq.addEventListener('change', on, { once:true }) : mq.addListener(on);
 })();
+const RS = { w: innerWidth, h: innerHeight };
 addEventListener('resize', () => {
-  syncPixelRatio();
   const w = innerWidth, h = innerHeight;
   camera.aspect = w/h; camera.fov = isSmall()?55:45; camera.updateProjectionMatrix();
+  // Android Chrome: the address bar folding away while you scroll fires resize. A full renderer + bloom rebuild
+  // there interrupts the scroll, so height-only changes on touch screens keep the existing buffers (the canvas is CSS-sized).
+  if(isTouch && w === RS.w && Math.abs(h - RS.h) < 200){ RS.h = h; finalPass.uniforms.uAsp.value = w/h; return; }
+  RS.w = w; RS.h = h;
+  syncPixelRatio();
   renderer.setSize(w,h); composer.setSize(w,h); bloom.resolution.set(w,h);
   finalPass.uniforms.uRes.value.set(w*DPR, h*DPR); finalPass.uniforms.uAsp.value = w/h;
 });
@@ -3151,7 +3153,7 @@ const Gate = (() => {
       onComplete(){ G.capAnim = false; capEl.style.opacity = 0; gsap.set(cs, { clearProps:'all' }); cs.style.animation = ''; } });
     gateEl.classList.add('go');
     // the click unlocks Web Audio at once: crystal strike + deep sub-bass rumble
-    Sound.setOn(!Sound.muted).then(on => {
+    Sound.setOn(true).then(on => {
       const sb = $('soundBtn'); sb.classList.toggle('on', on); sb.setAttribute('aria-pressed', on); $('soundState').textContent = on ? 'ON' : 'OFF';
       Sound.mood(false); Sound.ping(); Sound.rumble(3.4); Sound.warp(3.4);
     });
@@ -3233,7 +3235,10 @@ const Gate = (() => {
    ========================================================= */
 const clock = new THREE.Clock();
 const _tmpW = new THREE.Vector3(), _axisW = new THREE.Vector3(), dnaTarget = new THREE.Vector3();
+let tickFrame = 0;
 function tick(){
+  // phones: while the prologue text is on top, the 3D scene is only drawn every other frame so the page keeps scrolling smoothly
+  if(isTouch && aboutOpen && (++tickFrame % 6)){ clock.getDelta(); requestAnimationFrame(tick); return; }   // ~10 fps behind the text
   const dt = Math.min(clock.getDelta(), 0.05), t = clock.elapsedTime;
   const k = 1 - Math.pow(0.001, dt), kSlow = 1 - Math.pow(0.02, dt);
 
