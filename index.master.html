@@ -86,11 +86,11 @@ input,textarea{user-select:text;-webkit-user-select:text}
 #about.re #aboutBg{opacity:1}
 #about.leaving .ab-x{opacity:0;transition:opacity .6s}
 #about.leaving{pointer-events:none}
-#introTitle{position:fixed;left:0;right:0;top:17vh;z-index:22;display:flex;justify-content:center;gap:.55em;pointer-events:none;font:300 38px/1 'Noto Serif KR',serif;color:#EDE4CF;text-shadow:0 0 36px rgba(216,199,165,.35);transition:opacity 2s ease,filter 2s ease;visibility:hidden}
-#introTitle span{display:inline-block;opacity:0;filter:blur(10px)}
-#introTitle.on{visibility:visible}
-#introTitle.on span{opacity:1;filter:blur(0);transition:opacity 1.6s ease,filter 1.6s ease;transition-delay:calc(var(--k)*.35s)}
-#introTitle.out{opacity:0;filter:blur(8px)}
+/* the one-time title is one piece: it dissolves in as a whole, holds, and dissolves out as a whole */
+#introTitle{position:fixed;left:0;right:0;top:17vh;z-index:22;display:flex;justify-content:center;gap:.55em;pointer-events:none;white-space:nowrap;font:300 38px/1 'Noto Serif KR',serif;color:#EDE4CF;text-shadow:0 0 36px rgba(216,199,165,.35);opacity:0;filter:blur(10px);transition:opacity 2.4s ease,filter 2.4s ease;visibility:hidden}
+#introTitle span{display:inline-block}
+#introTitle.on{visibility:visible;opacity:1;filter:blur(0)}
+#introTitle.out{opacity:0;filter:blur(10px)}
 #introTitle.gone{display:none}
 #about .ab-x{opacity:calc(1 - var(--q,0))}
 #about .ab-wrap{max-width:860px;margin:0 auto;padding:0 28px;text-align:center}
@@ -142,6 +142,8 @@ input,textarea{user-select:text;-webkit-user-select:text}
 /* the great black hole: a ring that can fold to a point and open again into the portal */
 #about .ab-hole{position:fixed;left:50%;top:50%;width:92px;height:92px;margin:-46px 0 0 -46px;border-radius:50%;background:radial-gradient(circle,#000 0 62%,#030406 70%,rgba(3,4,6,0) 73%);box-shadow:0 0 0 1px rgba(232,238,245,.55),0 0 24px 4px rgba(216,199,165,.35),0 0 70px 14px rgba(110,226,210,.10);pointer-events:none;z-index:26}
 @media (max-width:820px){#about .ab-l{letter-spacing:.15em;padding-left:.15em}#about .ab-st{padding:18vh 0}}
+/* the title stays on ONE straight line on phones (iPhone content width ~334px): smaller size, no wrap */
+#about .ab-title{white-space:nowrap;font-size:clamp(26px,8vw,38px);letter-spacing:.2em;word-spacing:.2em}
 #flash{position:fixed;inset:0;z-index:95;background:radial-gradient(ellipse at 50% 50%,rgba(236,243,238,.96) 0%,rgba(184,208,200,.9) 46%,rgba(96,128,124,.82) 100%);opacity:0;pointer-events:none}
 
 /* ---------- HUD ---------- */
@@ -1003,6 +1005,8 @@ const Sound = (() => {
     if(document.hidden) ctx.suspend(); else if(on) ctx.resume();
   });
   setInterval(() => { if(ctx && on && ctx.state === 'suspended' && !document.hidden) ctx.resume(); }, 2000);
+  // build the audio graph and decode the ambient track while the page loads, so the first touch starts the music at once
+  try{ init(); }catch(e){}
   return { setOn, begin, toggle, get muted(){ return muted; }, chime, ping, rumble, tick, motion, level, warp, boom, mood, get on(){ return on; } };
 })();
 
