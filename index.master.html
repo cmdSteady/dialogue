@@ -87,11 +87,6 @@ input,textarea{user-select:text;-webkit-user-select:text}
 #about.leaving .ab-x{opacity:0;transition:opacity .6s}
 #about.leaving{pointer-events:none}
 /* the one-time title is one piece: it dissolves in as a whole, holds, and dissolves out as a whole */
-#introTitle{position:fixed;left:0;right:0;top:17vh;z-index:22;display:flex;justify-content:center;gap:.55em;pointer-events:none;white-space:nowrap;font:300 38px/1 'Noto Serif KR',serif;color:#EDE4CF;text-shadow:0 0 36px rgba(216,199,165,.35);opacity:0;filter:blur(10px);transition:opacity 2.4s ease,filter 2.4s ease;visibility:hidden}
-#introTitle span{display:inline-block}
-#introTitle.on{visibility:visible;opacity:1;filter:blur(0)}
-#introTitle.out{opacity:0;filter:blur(10px)}
-#introTitle.gone{display:none}
 #about .ab-x{opacity:calc(1 - var(--q,0))}
 #about .ab-wrap{max-width:860px;margin:0 auto;padding:0 28px;text-align:center}
 #about .ab-top{height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px}
@@ -144,6 +139,20 @@ input,textarea{user-select:text;-webkit-user-select:text}
 @media (max-width:820px){#about .ab-l{letter-spacing:.15em;padding-left:.15em}#about .ab-st{padding:18vh 0}}
 /* the title stays on ONE straight line on phones (iPhone content width ~334px): smaller size, no wrap */
 #about .ab-title{white-space:nowrap;font-size:clamp(26px,8vw,38px);letter-spacing:.2em;word-spacing:.2em}
+/* 제목: 고문서가 천천히 타오르며 떠오르는 연출 (글자 단위) */
+#about h1.ab-title.ab-rv{opacity:1;filter:none;transform:none;transition:none}
+#about h1.ab-title .ab-ins{background:none;-webkit-background-clip:border-box;background-clip:border-box;color:inherit;-webkit-text-fill-color:currentColor;animation:none}
+#about h1.ab-title .ch{display:inline-block;opacity:0;color:#4a2f1a;animation:abEmber 4.8s cubic-bezier(.33,.0,.2,1) both;animation-delay:calc(var(--k,0)*.42s + .5s)}
+#about h1.ab-title.in .ch{animation-play-state:running}
+#about h1.ab-title:not(.in) .ch{animation:none;opacity:0}
+@keyframes abEmber{
+  0%{opacity:0;color:#4a2f1a;text-shadow:0 0 0 rgba(255,140,60,0);filter:blur(7px)}
+  30%{opacity:.3;color:#8a5a2e;text-shadow:0 0 12px rgba(255,140,60,.4);filter:blur(4px)}
+  60%{opacity:.8;color:#d2a46a;text-shadow:0 0 16px rgba(255,150,70,.36);filter:blur(1.5px)}
+  82%{opacity:1;color:#f1e4c8;text-shadow:0 0 14px rgba(216,199,165,.3);filter:blur(0)}
+  100%{opacity:1;color:#EDE4CF;text-shadow:0 0 10px rgba(216,199,165,.2);filter:blur(0)}
+}
+@media (prefers-reduced-motion:reduce){#about h1.ab-title .ch{animation:none;opacity:1;color:#EDE4CF}}
 #flash{position:fixed;inset:0;z-index:95;background:radial-gradient(ellipse at 50% 50%,rgba(236,243,238,.96) 0%,rgba(184,208,200,.9) 46%,rgba(96,128,124,.82) 100%);opacity:0;pointer-events:none}
 
 /* ---------- HUD ---------- */
@@ -409,7 +418,6 @@ body.is-admin #dEdit{display:inline-block}
 
 <div id="audioHud" aria-live="polite"></div>
 
-<div id="introTitle" aria-hidden="true"><span style="--k:0">천</span><span style="--k:1">년</span><span style="--k:2">의</span><span style="--k:3">대</span><span style="--k:4">화</span></div>
 
 <section id="about" role="dialog" aria-modal="true" aria-label="프롤로그">
   <div id="aboutBg"></div>
@@ -2329,20 +2337,18 @@ function aboutProgress(){
 const hoState = { done:false, dwell:0, timers:[] };
 let hoArmed = false;
 let wheelLock = false;
-const introTitle = $('introTitle'), aboutWrap = aboutEl.querySelector('.ab-wrap');
+const aboutWrap = aboutEl.querySelector('.ab-wrap');
 function hoAt(ms, fn){ hoState.timers.push(setTimeout(fn, ms)); }
 function hoReset(){
   hoState.timers.forEach(clearTimeout); hoState.timers = [];
   if(hoState.dwell){ clearTimeout(hoState.dwell); hoState.dwell = 0; }
   hoState.done = false; wheelLock = false; Gate.capOK = true; bufferWheels = 0; if(bufferPoll){ clearTimeout(bufferPoll); bufferPoll = 0; }
   aboutWrap.classList.remove('leave'); aboutWrap.style.display = ''; aboutEl.classList.remove('leaving');
-  introTitle.className = '';
 }
 window.introCancel = function(){          // the star was touched early → no title at all
   hoState.timers.forEach(clearTimeout); hoState.timers = [];
   if(hoState.dwell){ clearTimeout(hoState.dwell); hoState.dwell = 0; }
   hoState.done = true; wheelLock = false; Gate.capOK = true;
-  introTitle.className = 'gone';
 };
 function handoff(){
   if(hoState.done || !hoArmed) return;
@@ -2376,9 +2382,9 @@ function handoff(){
   hoAt(4100, () => { aboutEl.style.background = ''; aboutEl.style.transition = ''; hole.remove(); });
   // the one-time title, then the same slow dissolve as before
   if(!reopen){
-    hoAt(4000, () => { introTitle.className = 'on'; Sound.chime(); });
-    hoAt(4000 + 4*350 + 1600 + 3000, () => { introTitle.classList.add('out'); });
-    hoAt(4000 + 4*350 + 1600 + 3000 + 2000, () => { introTitle.className = 'gone'; Gate.capOK = true; });
+    // the title was removed; the gate timing stays the same
+    hoAt(4000, () => { Sound.chime(); });
+    hoAt(4000 + 4*350 + 1600 + 3000 + 1300, () => { Gate.capOK = true; });
     hoAt(4000 + 4*350 + 1600 + 3000 + 2600, () => { wheelLock = false; });
   } else {
     hoAt(4100, () => { Gate.capOK = true; wheelLock = false; });
@@ -2427,6 +2433,20 @@ aboutEl.addEventListener('touchmove', e => {
   proAdd(dy, SCROLL_TUNE.touch);
 }, { passive:false });
 aboutEl.addEventListener('touchend', () => { touchY = null; }, { passive:true });
+// 제목 글자 분해: 글자마다 span.ch를 만들어 순서(--k)대로 타오르게 함 (공백은 그대로 둠)
+(function splitTitle(){
+  const ins = document.querySelector('#about h1.ab-title .ab-ins');
+  if(!ins) return;
+  const text = ins.textContent;
+  ins.textContent = '';
+  let k = 0;
+  for(const ch of text){
+    if(ch === ' '){ ins.appendChild(document.createTextNode(' ')); continue; }
+    const s = document.createElement('span');
+    s.className = 'ch'; s.style.setProperty('--k', k++); s.textContent = ch;
+    ins.appendChild(s);
+  }
+})();
 let aboutTick = 0;
 aboutEl.addEventListener('scroll', () => {
   if(aboutTick) return;
