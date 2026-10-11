@@ -85,7 +85,7 @@ input,textarea{user-select:text;-webkit-user-select:text}
 @media (max-width:820px){#story{right:4vw;left:4vw;width:auto;top:auto;bottom:3vh;max-height:56vh;transform:translateY(26px)}#story.open{transform:none}#storyBtn{right:50%;transform:translateX(50%);bottom:calc(max(16px,3vh) + 112px)}}
 #aboutBtn{height:34px;padding:0 15px;border-radius:999px;border:1px solid rgba(216,199,165,.38);background:rgba(4,5,8,.4);font-family:var(--mono);font-size:10px;letter-spacing:.24em;color:#D8C7A5;cursor:none;transition:color .3s,border-color .3s,background .3s}
 #aboutBtn:hover{color:#fff;border-color:rgba(232,238,245,.8);background:rgba(216,199,165,.1)}
-#about{position:fixed;inset:0;z-index:70;overflow-y:auto;overflow-x:hidden;background:transparent;opacity:0;visibility:hidden;scrollbar-width:none;transition:opacity 1.4s ease,visibility 0s linear 1.4s}
+#about{position:fixed;inset:0;z-index:70;overflow-y:auto;overflow-x:hidden;touch-action:pan-y;overscroll-behavior:contain;background:transparent;opacity:0;visibility:hidden;scrollbar-width:none;transition:opacity 1.4s ease,visibility 0s linear 1.4s}
 #about::-webkit-scrollbar{display:none}
 #about.open{opacity:1;visibility:visible;transition-delay:0s}
 #aboutBg{position:fixed;inset:0;z-index:-1;pointer-events:none;background:radial-gradient(120% 90% at 50% 0%,rgba(15,76,69,.2),rgba(3,4,7,.95) 58%),rgba(3,4,7,.93);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);opacity:calc(1 - var(--q,0)*.97)}
@@ -695,8 +695,7 @@ const Convert = (() => {
     const bmp = await decode(file);
     const w = bmp.width || bmp.naturalWidth, h = bmp.height || bmp.naturalHeight;
     const keepAlpha = alphaCapable(file);
-    // small, already-web-friendly files are stored as-is
-    if(Math.max(w,h) <= MAX && file.size < 3.5e6 && /^image\/(jpeg|png|webp)$/i.test(file.type)){ bmp.close && bmp.close(); return { blob:file }; }
+    // every photo is re-encoded through the canvas: one clean path (EXIF rotation applied, odd encodings normalised)
     const c = toCanvas(bmp, w, h, null); bmp.close && bmp.close();
     return { blob: await canvasToBlob(c, keepAlpha ? 'image/png' : 'image/jpeg', 0.92) };
   }
@@ -986,7 +985,7 @@ const Sound = (() => {
 const SPACING = 4.0, SZ = 0, ANG_STEP = Math.PI/3, PANEL_R = 3.4, CAM_R = 11.2, HELIX_R = 2.1;   // radius cut ~40%: works wrap the particle vortex instead of hugging the frame
 const CAMOFF = -0.3, XOFF = 4.9, CAMD = 13.5, TILT = 0.115;                     // staircase: sideways offset, camera distance, ~6.5° card tilt
 const PATH_LEN = Math.hypot(SPACING, SZ), PATH_ANG = Math.atan2(SZ, SPACING);
-const PW = 4.4, PH = 3.0, MARGIN = 0.55, TWIST = 0.42;
+const PW = 4.0, PH = 2.72, MARGIN = 0.55, TWIST = 0.42;   // frame trimmed ~17% so the works read as a calm, even set
 const isTouch = matchMedia('(hover:none)').matches;
 const isSmall = () => innerWidth < 820;
 
@@ -1053,6 +1052,7 @@ const dnaMat = new THREE.ShaderMaterial({
     const vec3 EMERALD = vec3(0.059, 0.298, 0.271);   // #0F4C45
     const vec3 GOLD    = vec3(0.847, 0.780, 0.647);   // #D8C7A5
     const vec3 OPAL    = vec3(0.910, 0.933, 0.961);   // #E8EEF5
+    const vec3 VIOLET  = vec3(0.420, 0.280, 0.660);   // soft opal violet
     void main(){
       float y = aY, ang = y * uTwist;
       float breathe = 0.5 + 0.5*sin(uTime*0.9 + y*0.5);
@@ -1068,7 +1068,7 @@ const dnaMat = new THREE.ShaderMaterial({
         vec3 pA = vec3(cos(ang)*R, y, sin(ang)*R), pB = vec3(cos(ang+3.14159265)*R, y, sin(ang+3.14159265)*R);
         p = mix(pA, pB, aS) + aRand.xyz*(0.8 + 0.6*breathe); baseA = 0.6; sizeK = 0.9;
       } else {                                           // nebula body filling the orbit between and around the strands
-        float r = R * (0.12 + 1.5*aS);
+        float r = R * (0.12 + 2.3*aS);
         float a = ang + (aRand.w - 0.5)*3.2 + swirl*0.35;
         p = vec3(cos(a)*r, y, sin(a)*r) + aRand.xyz*vec3(0.9, 1.5, 0.9)*(0.8 + 0.5*breathe); baseA = 0.22; sizeK = 2.4;
       }
@@ -1083,6 +1083,8 @@ const dnaMat = new THREE.ShaderMaterial({
       float w = 0.5 + 0.5*sin(y*0.42 - uTime*0.65 + aC*6.2831 + p.x*0.15);
       vec3 col = mix(EMERALD*3.2, GOLD, smoothstep(0.30, 0.78, w));
       col = mix(col, OPAL, smoothstep(0.82, 1.0, w) * 0.85);
+      float vio = smoothstep(0.62, 0.95, 0.5 + 0.5*sin(y*0.23 + aC*5.0 + uTime*0.12));
+      col = mix(col, VIOLET*2.4, vio*0.45);
       float pulse = pow(0.5 + 0.5*sin(y*0.7 - uTime*1.8 + aC*3.0), 9.0);
       vCol = col * (0.9 + 0.9*pulse);
       float near = exp(-pow((y - uFocusY)*0.07, 2.0));
@@ -1104,7 +1106,7 @@ function buildHelix(n){
   const TOTAL = isTouch ? 26000 : 46000;                    // 40–50k luminous particles
   const RUNG_STEP = 0.7, RUNG_PTS = isTouch ? 22 : 34;
   const rungCount = Math.floor(len/RUNG_STEP);
-  const MIST = Math.floor(TOTAL*0.2);
+  const MIST = Math.floor(TOTAL*0.3);
   const STRAND = Math.floor((TOTAL - rungCount*RUNG_PTS - MIST)/2);
   const total = STRAND*2 + rungCount*RUNG_PTS + MIST;
   const aY = new Float32Array(total), aType = new Float32Array(total), aS = new Float32Array(total), aC = new Float32Array(total);
@@ -1201,6 +1203,35 @@ const backGeo = (() => {
 })();
 const backMat = new THREE.MeshPhysicalMaterial({ color:0x0a1210, metalness:0.15, roughness:0.18, transmission:0.65, clearcoat:1, clearcoatRoughness:0.08, reflectivity:0.9, transparent:true, opacity:0.88, emissive:0x0f3a33, emissiveIntensity:0.6 });
 const frontGeo = new THREE.PlaneGeometry(PW+MARGIN*2, PH+MARGIN*2);
+// glass slate: a rounded frosted plate that stands a little larger than the work, behind it (Active Theory style showcase)
+const slateGeo = (() => {
+  const w = PW + MARGIN*2 + 0.5, h = PH + MARGIN*2 + 0.5;
+  const g = new THREE.ExtrudeGeometry(roundedShape(w, h, 0.42), { depth:0.06, bevelEnabled:true, bevelThickness:0.05, bevelSize:0.05, bevelSegments:6, curveSegments:16 });
+  g.translate(0, 0, -0.42); return g;
+})();
+const slateVS = `
+  varying vec3 vN; varying vec3 vV; varying vec3 vL;
+  void main(){
+    vL = position; vN = normalize(normalMatrix * normal);
+    vec4 mv = modelViewMatrix * vec4(position, 1.0); vV = normalize(-mv.xyz);
+    gl_Position = projectionMatrix * mv;
+  }`;
+const slateFS = `
+  uniform float uA, uTime, uSeed; uniform vec3 uTint;
+  varying vec3 vN; varying vec3 vV; varying vec3 vL;
+  float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+  void main(){
+    float fres = pow(1.0 - abs(dot(normalize(vN), normalize(vV))), 2.2);       // edges catch the light
+    vec3 base = vec3(0.030, 0.085, 0.085) + uTint * 0.05;                       // dark teal glass body
+    float grain = (hash(floor(vL.xy * 150.0) + uSeed + floor(uTime * 12.0)) - 0.5) * 0.045;   // frosted grain
+    float shimmer = 0.75 + 0.25 * sin(vL.y * 2.2 + uTime * 0.4 + uSeed);
+    vec3 cyan = vec3(0.36, 0.94, 0.88), gold = vec3(0.96, 0.80, 0.52);
+    float hgt = smoothstep(-1.4, 1.4, vL.y);                                    // gold on the top edge, cyan below
+    vec3 rim = mix(cyan, gold, hgt) * shimmer;
+    vec3 col = base + grain + rim * fres * 1.7;
+    gl_FragColor = vec4(col, uA * (0.40 + 0.55 * fres));
+  }`;
+
 
 const panelVS = `
   varying vec2 vUv; varying vec3 vN; varying vec3 vV;
@@ -1227,8 +1258,12 @@ const panelFS = `
     vec2 scCover = vec2(1.0), scContain = vec2(1.0);
     if(uImgAspect > pa){ scCover.x = pa/uImgAspect; scContain.y = uImgAspect/pa; }
     else               { scCover.y = uImgAspect/pa; scContain.x = pa/uImgAspect; }
-    float pad = mix(1.0, 1.14, uFit);                       // breathing room around a contained work
-    vec2 sc = mix(scCover, scContain * pad, uFit);
+    // contained works: the picture covers the same share (70%) of the frame area for every proportion, so the set reads even
+    float fwR = sqrt(0.70*uImgAspect/pa), fhR = sqrt(0.70*pa/uImgAspect);
+    float kR = min(1.0, 0.92/max(fwR, fhR));                 // one shared factor: clamp never breaks the image's aspect
+    float fwA = fwR*kR, fhA = fhR*kR;
+    vec2 scArea = vec2(1.0/fwA, 1.0/fhA);
+    vec2 sc = mix(scCover, scArea, uFit);
     vec2 tuv = (iuv-0.5)*sc*(1.0-0.02*uHover) + 0.5;
 
     float slice = floor(iuv.y*28.0);
@@ -1534,6 +1569,10 @@ function createPanel(item){
   };
   const front = new THREE.Mesh(frontGeo, new THREE.ShaderMaterial({ uniforms, vertexShader:panelVS, fragmentShader:panelFS, transparent:true, depthWrite:false }));
   front.position.z = 0.012; front.renderOrder = 2; inner.add(front);
+  const slate = new THREE.Mesh(slateGeo, new THREE.ShaderMaterial({
+    uniforms:{ uA:{value:1}, uTime:{value:0}, uSeed:{value:seed}, uTint:{value:new THREE.Color(RIMS[seedCounter%3])} },
+    vertexShader:slateVS, fragmentShader:slateFS, transparent:true, depthWrite:false, side:THREE.DoubleSide }));
+  slate.renderOrder = 0; inner.add(slate);
   const gu = { uGlowCol:uniforms.uGlowCol, uRim:uniforms.uRim, uTime:uniforms.uTime, uHover:uniforms.uHover, uActive:uniforms.uActive,
                uSeed:uniforms.uSeed, uHasMap:uniforms.uHasMap, uSize:uniforms.uSize, uAlpha:{value:1} };
   const glow = new THREE.Mesh(glowGeo, new THREE.ShaderMaterial({ uniforms:gu, vertexShader:glowVS, fragmentShader:glowFS, transparent:true, depthWrite:false, blending:THREE.AdditiveBlending }));
@@ -1546,7 +1585,7 @@ function createPanel(item){
   const label = new THREE.Mesh(new THREE.PlaneGeometry(lw, lh), new THREE.ShaderMaterial({ uniforms:lu, vertexShader:labelVS, fragmentShader:labelFS, transparent:true, depthWrite:false, blending:THREE.AdditiveBlending }));
   // (3D label removed from the scene — titles only appear as a 2D caption when an artwork is focused)
 
-  const p = { item, anchor, inner, bm, front, glow, gu, uniforms, label, lw, lh, lu, lctx:lc.getContext('2d'), ltex,
+  const p = { item, anchor, inner, bm, front, slate, glow, gu, uniforms, label, lw, lh, lu, lctx:lc.getContext('2d'), ltex,
     jx:0, jz:0, jy:0,
     hover:0, tiltX:0, tiltY:0, texture:null, loadToken:0, hitUV:null };
   front.userData.panel = p;
@@ -1573,7 +1612,7 @@ function placePanel(p, i, animate){
 function disposePanel(p){
   clearVines(p);
   scene.remove(p.anchor);
-  p.bm.dispose(); p.front.material.dispose(); p.glow.material.dispose(); p.label.material.dispose(); p.label.geometry.dispose(); p.ltex.dispose();
+  p.bm.dispose(); p.front.material.dispose(); p.slate.material.dispose(); p.glow.material.dispose(); p.label.material.dispose(); p.label.geometry.dispose(); p.ltex.dispose();
   if(p.texture) p.texture.dispose();
 }
 
@@ -1800,7 +1839,8 @@ function busy(on, txt, sub){
 function busyText(txt, sub){ $('busyTxt').textContent = txt; $('busySub').textContent = sub || ''; }
 async function setItemImageFromFile(uid, file){
   if(!Convert.supported(file)){ toast(`지원하지 않는 형식이에요 (${file.name}) — JPG · PNG · WebP · HEIC · PDF 등을 올려 주세요`, true); return false; }
-  const it = items.find(x => x.uid === uid), p = panelOf(uid);
+  const it = items.find(x => x.uid === uid);
+  let p = panelOf(uid);
   if(!it || !p) return false;
   let blob, note;
   const heavy = /pdf|heic/.test(Convert.kind(file)) || file.size > 4e6;
@@ -1817,9 +1857,15 @@ async function setItemImageFromFile(uid, file){
     return false;
   }
   busy(false);
+  p = panelOf(uid) || p;   // the scene may have been rebuilt while converting: load into the live panel
   const prev = { src:it.src, objectUrl:it.objectUrl };
   it.src = { type:'blob', blob }; it.objectUrl = null;
-  const ok = await loadPanelImage(p, true);
+  let ok = await loadPanelImage(p, true);
+  if(!ok){                 // a load can be superseded by a rebuild: retry once on the live panel
+    await new Promise(r => setTimeout(r, 350));
+    const p2 = panelOf(uid);
+    if(p2){ p = p2; ok = await loadPanelImage(p, true); }
+  }
   if(!ok){
     if(it.objectUrl) URL.revokeObjectURL(it.objectUrl);
     it.src = prev.src; it.objectUrl = prev.objectUrl;
@@ -2162,9 +2208,10 @@ function inWork(p, lx, ly){
   const g = artAlpha(p); if(!g) return true;
   const aspect = p.uniforms.uImgAspect.value, pa = PW/PH, fit = p.uniforms.uFit.value;
   const cov = aspect > pa ? [pa/aspect, 1] : [1, aspect/pa];
-  const con = aspect > pa ? [1, aspect/pa] : [pa/aspect, 1];
-  const pad = 1 + 0.14*fit, hs = 1 - 0.02*p.hover;
-  const sx = (cov[0] + (con[0]*pad - cov[0])*fit), sy = (cov[1] + (con[1]*pad - cov[1])*fit);
+  const fwR = Math.sqrt(0.70*aspect/pa), fhR = Math.sqrt(0.70*pa/aspect), kR = Math.min(1, 0.92/Math.max(fwR, fhR));
+  const fwA = fwR*kR, fhA = fhR*kR;   // same area rule as the shader: one shared factor keeps the aspect
+  const hs = 1 - 0.02*p.hover;
+  const sx = cov[0] + (1/fwA - cov[0])*fit, sy = cov[1] + (1/fhA - cov[1])*fit;
   const iu = lx/PW + 0.5, iv = ly/PH + 0.5;
   const tu = (iu-0.5)*sx*hs + 0.5, tv = (iv-0.5)*sy*hs + 0.5;
   if(tu < 0 || tu > 1 || tv < 0 || tv > 1) return false;
@@ -2274,7 +2321,6 @@ function handoff(){
   // 0 - 0.9 s: the story dissolves and the room goes to pitch black
   aboutWrap.classList.add('leave'); aboutEl.classList.add('leaving');
   aboutEl.style.transition = 'background .9s ease'; aboutEl.style.background = '#000';
-  Sound.warp();
   hoAt(1000, () => { aboutWrap.style.display = 'none'; if(reopen) Gate.resetToHole(); });   // the spiral is swapped out under the dark
   // 0.9 - 1.9 s: the great black hole shrinks into a single point; 1.9 - 2.2 s: the point holds
   // 2.2 s: the point is gone; a dark beat; 2.6 s: the room lifts and the portal is there
@@ -3246,6 +3292,7 @@ function tick(){
       const goal = Math.min(yF, dF), cur = p.fade ?? 1;
       p.fade = cur + (goal - cur) * Math.min(1, k*0.9);
       p.uniforms.uFade.value = p.fade; p.gu.uAlpha.value *= p.fade; p.lu.uAlpha.value *= p.fade; }
+    { const sm = p.slate.material.uniforms; sm.uTime.value = t; sm.uA.value = (1 - active) * (p.fade ?? 1); }
     if(Math.random() < 0.0016) gsap.fromTo(p.lu.uGlitch, {value:.8},{value:0,duration:.4});
   });
 
