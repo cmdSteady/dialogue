@@ -139,6 +139,12 @@ input,textarea{user-select:text;-webkit-user-select:text}
 @media (max-width:820px){#about .ab-l{letter-spacing:.15em;padding-left:.15em}#about .ab-st{padding:18vh 0}}
 /* the title stays on ONE straight line on phones (iPhone content width ~334px): smaller size, no wrap */
 #about .ab-title{white-space:nowrap;font-size:clamp(26px,8vw,38px);letter-spacing:.2em;word-spacing:.2em}
+/* 첫 진입 안내: 스크롤하면 프롤로그가 열림 */
+.start-hint{position:fixed;left:0;right:0;bottom:12vh;z-index:40;text-align:center;font:300 11px/1 'Noto Serif KR',serif;letter-spacing:.42em;padding-left:.42em;color:rgba(200,184,150,.7);pointer-events:none;animation:startPulse 3.2s ease-in-out infinite;transition:opacity .9s ease}
+.start-hint.out{opacity:0}
+.start-hint .cue{display:block;position:relative;left:.21em;width:1px;height:46px;margin:16px auto 0;background:linear-gradient(to bottom,rgba(216,199,165,0) 0%,rgba(216,199,165,.85) 50%,rgba(216,199,165,0) 100%);background-size:100% 220%;background-repeat:no-repeat;animation:cueDrop 2.6s cubic-bezier(.45,0,.25,1) infinite}
+@keyframes cueDrop{0%{background-position:0 -120%;opacity:0}15%{opacity:1}75%{opacity:.9}100%{background-position:0 100%;opacity:0}}
+@keyframes startPulse{0%,100%{opacity:.35}50%{opacity:.85}}
 /* 제목: 고문서가 천천히 타오르며 떠오르는 연출 (글자 단위) */
 #about h1.ab-title.ab-rv{opacity:1;filter:none;transform:none;transition:none}
 #about h1.ab-title .ab-ins{background:none;-webkit-background-clip:border-box;background-clip:border-box;color:inherit;-webkit-text-fill-color:currentColor;animation:none}
@@ -3438,10 +3444,28 @@ async function boot(){
   $('loader').classList.add('done');
   Gate.hideGallery();
   Sound.begin();                                                   // music begins with the prologue (or at the first allowed moment)
-  if(location.hash === '#skip') Gate.skip(); else { introPending = true; Gate.starA = 0; Gate.starAS = 0; Gate.prime(); openAbout(); }
+  if(location.hash === '#skip') Gate.skip(); else { introPending = true; Gate.starA = 0; Gate.starAS = 0; Gate.prime(); startHint(); }
   gsap.from('.hud', { opacity:0, y:12, duration:1.2, stagger:.12, delay:1.6, ease:'power3.out' });
   if(!Store.ok) setTimeout(() => toast('이 브라우저에서는 저장소를 쓸 수 없어 변경 사항이 새로고침 후 사라져요', true), 4000);
   else if(restored) setTimeout(() => toast(`저장된 컬렉션 ${items.length}점을 불러왔어요`), 3200);
+}
+// first visit: a quiet "스크롤하여 시작" hint; the first scroll, wheel or key opens the prologue (and the first gesture also starts the sound)
+function startHint(){
+  const el = document.createElement('div'); el.className = 'start-hint';
+  const label = document.createElement('span'); label.textContent = '스크롤하여 시작';
+  const cue = document.createElement('span'); cue.className = 'cue';   // a thin light that drifts down, like a slow scroll cue
+  el.append(label, cue);
+  document.body.appendChild(el);
+  const evs = ['wheel','touchmove','keydown'];
+  let started = false;
+  const go = () => {
+    if(started) return; started = true;
+    evs.forEach(t => removeEventListener(t, go, true));
+    el.classList.add('out');
+    setTimeout(() => el.remove(), 950);
+    openAbout();
+  };
+  evs.forEach(t => addEventListener(t, go, { capture:true, passive:true }));
 }
 window.__helix = { get state(){ return state; }, get camera(){ return camera; }, get panels(){ return panels; }, get gate(){ return Gate; }, get sound(){ return Sound; } };   // debug handle (read-only use)
 boot();
