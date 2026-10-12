@@ -1044,7 +1044,7 @@ const isSmall = () => innerWidth < 820;
 
 const canvas = $('gl');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias:false, powerPreference:'high-performance' });
-let DPR = Math.min(window.devicePixelRatio || 1, isTouch ? 1.5 : 2);   // Retina: crisp at 2x on desktop; phones cap at 1.5 to keep scrolling smooth
+let DPR = Math.min(window.devicePixelRatio || 1, isTouch ? 1.75 : 2);   // Retina: crisp at 2x on desktop; phones cap at 1.5 to keep scrolling smooth
 renderer.setPixelRatio(DPR);
 renderer.setSize(innerWidth, innerHeight);
 renderer.outputEncoding = THREE.sRGBEncoding;
@@ -2035,10 +2035,11 @@ async function resetDefaults(){
 /* =========================================================
    POST PROCESSING
    ========================================================= */
+const BLOOM_SCALE = isTouch ? 0.75 : 1;                // phones: bloom at 3/4 resolution (the heaviest pass)
 const composer = new THREE.EffectComposer(renderer);
 composer.setPixelRatio(DPR);
 composer.addPass(new THREE.RenderPass(scene, camera));
-const bloom = new THREE.UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.9, 0.6, 0.25);
+const bloom = new THREE.UnrealBloomPass(new THREE.Vector2(innerWidth*BLOOM_SCALE, innerHeight*BLOOM_SCALE), 0.9, 0.6, 0.25);
 composer.addPass(bloom);
 const finalPass = new THREE.ShaderPass({
   uniforms:{ tDiffuse:{value:null}, uTime:{value:0}, uRes:{value:new THREE.Vector2(innerWidth*DPR,innerHeight*DPR)}, uAberr:{value:0.0025}, uShock:{value:0}, uSpot:{value:0}, uLC:{value:new THREE.Vector2(.5,.5)}, uLS:{value:0}, uRR:{value:new THREE.Vector3(9,9,9)}, uRA:{value:new THREE.Vector3(0,0,0)}, uMg:{value:0}, uAsp:{value:innerWidth/innerHeight}, uRC:{value:new THREE.Vector2(.5,.5)}, uRip:{value:1} },
@@ -2175,7 +2176,7 @@ addEventListener('pointermove', e => {
     trail.push({ t:performance.now(), y:e.clientY }); if(trail.length > 8) trail.shift();
     if(moved > 6){
       if(detailOpen) closeDetail(false, 0.9);                       // dragging also leaves the focus view immediately
-      state.target = clampT(state.target - dy*(e.pointerType==='touch'?0.015:0.008));
+      state.target = clampT(state.target - dy*(e.pointerType==='touch'?0.0065:0.008));
       state.orbitT = Math.max(-1.6, Math.min(1.6, state.orbitT + dx*0.004));
       ui.cursor.classList.add('drag'); ui.cursorTxt.textContent = 'DRAG';
       hideHint();
@@ -2192,7 +2193,7 @@ addEventListener('pointerup', e => {
       const a = recent[0], b = recent[recent.length-1], v = (b.y - a.y) / Math.max(1, b.t - a.t);   // px per ms (+ = finger moved down)
       if(Math.abs(v) > 0.2){
         const travel = Math.max(-900, Math.min(900, v * 300));                    // flick distance in px
-        gsap.to(state, { target:clampT(state.target - travel*0.015), duration:1.1, ease:'power3.out', overwrite:'auto' });
+        gsap.to(state, { target:clampT(state.target - travel*0.0065), duration:1.0, ease:'power3.out', overwrite:'auto' });
         flung = true;
       }
     }
@@ -2471,6 +2472,16 @@ aboutEl.addEventListener('touchmove', e => {
   proAdd(dy, SCROLL_TUNE.touch);
 }, { passive:false });
 aboutEl.addEventListener('touchend', () => { touchY = null; }, { passive:true });
+// phones: a tap on the black hole enters on the first touch (touchend) instead of waiting for the synthetic click
+let holeTap = null;
+aboutEl.addEventListener('touchstart', e => { const t = e.touches[0]; holeTap = t ? { x:t.clientX, y:t.clientY } : null; }, { passive:true });
+aboutEl.addEventListener('touchend', e => {
+  const t = e.changedTouches[0]; if(!t || !holeTap) return;
+  const moved = Math.hypot(t.clientX - holeTap.x, t.clientY - holeTap.y); holeTap = null;
+  if(moved > 18) return;                                         // a drag is not a tap
+  if(!introPending || !Gate.ready || Gate.running || Gate.starAS < 0.35) return;
+  if(Gate.pick(t.clientX, t.clientY)){ introPending = false; Gate.starA = 1; closeAbout(); Gate.enter(); }
+}, { passive:true });
 // 제목 글자 분해: 글자마다 span.ch를 만들어 순서(--k)대로 타오르게 함 (공백은 그대로 둠)
 (function splitTitle(){
   const ins = document.querySelector('#about h1.ab-title .ab-ins');
@@ -2520,7 +2531,7 @@ function closeAbout(){
 $('aboutBtn').addEventListener('click', openAbout);
 $('aboutX').addEventListener('click', closeAbout);
 aboutEl.addEventListener('click', e => {            // touching the star at the end of the prologue
-  if(!introPending || !Gate.ready || Gate.running || Gate.starAS < 0.7) return;
+  if(!introPending || !Gate.ready || Gate.running || Gate.starAS < 0.35) return;
   if(e.target.closest && e.target.closest('.ab-x')) return;
   if(Gate.pick(e.clientX, e.clientY)){ introPending = false; Gate.starA = 1; closeAbout(); Gate.enter(); }
 });
@@ -2997,7 +3008,7 @@ addEventListener('resize', () => {
   if(isTouch && w === RS.w && Math.abs(h - RS.h) < 200){ RS.h = h; finalPass.uniforms.uAsp.value = w/h; return; }
   RS.w = w; RS.h = h;
   syncPixelRatio();
-  renderer.setSize(w,h); composer.setSize(w,h); bloom.resolution.set(w,h);
+  renderer.setSize(w,h); composer.setSize(w,h); bloom.resolution.set(w*BLOOM_SCALE, h*BLOOM_SCALE);
   finalPass.uniforms.uRes.value.set(w*DPR, h*DPR); finalPass.uniforms.uAsp.value = w/h;
 });
 
@@ -3126,7 +3137,13 @@ const Gate = (() => {
     mouse.set((x/innerWidth)*2-1, -(y/innerHeight)*2+1);
     camera.updateMatrixWorld(); root.updateMatrixWorld(true);
     rc.setFromCamera(mouse, camera);
-    return rc.intersectObject(hit, false).length > 0;
+    if(rc.intersectObject(hit, false).length > 0) return true;
+    if(!isTouch) return false;
+    // phones: a finger tap near the black hole's projected centre also enters (generous radius, as a fingertip is large)
+    const c = new THREE.Vector3(); star.getWorldPosition(c); c.project(camera);
+    if(c.z > 1) return false;
+    const sx = (c.x + 1) / 2 * innerWidth, sy = (1 - c.y) / 2 * innerHeight;
+    return Math.hypot(x - sx, y - sy) < Math.max(90, 0.22 * Math.min(innerWidth, innerHeight));
   };
   G.update = function(dt, t){
     // hover (Raycaster against an invisible sphere hugging the star)
