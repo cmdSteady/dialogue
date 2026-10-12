@@ -70,6 +70,19 @@ function builtinEmbedTokens(master) {
   return map;
 }
 
+// uid -> ordered EMBED_* names of built-in extra photos, read from the master's EXTRA_PHOTOS line.
+function builtinExtraTokens(master) {
+  const map = {};
+  const block = master.match(/const EXTRA_PHOTOS = \{([\s\S]*?)\};/);
+  if (!block) return map;
+  const re = /'([^']+)':\s*\[([^\]]*)\]/g;
+  let m;
+  while ((m = re.exec(block[1]))) {
+    map[m[1]] = m[2].split(',').map((t) => t.trim()).filter(Boolean);
+  }
+  return map;
+}
+
 const jsStr = (s) => JSON.stringify(String(s ?? ''));
 
 function validateItem(it, i) {
@@ -81,9 +94,12 @@ function validateItem(it, i) {
     }
   }
   if (!FITS.includes(it.fit || 'cover')) throw new Error(`item ${i}: bad fit`);
+  if (it.extras != null && (!Array.isArray(it.extras) || it.extras.length > 12)) {
+    throw new Error(`item ${i}: bad extras`);
+  }
 }
 
-function artLine(it, tokens) {
+function artLine(it, tokens, extraTokens) {
   let embed;
   if (it.builtin) {
     embed = tokens[it.uid];
@@ -97,10 +113,26 @@ function artLine(it, tokens) {
   } else {
     throw new Error(`item ${it.uid}: no image`);
   }
+  // extra photos: built-in ones by index into EXTRA_PHOTOS, added ones as data URLs
+  const embeds = [];
+  for (const x of it.extras || []) {
+    if (x && x.builtin) {
+      const t = (extraTokens[it.uid] || [])[x.index];
+      if (!t) throw new Error(`item ${it.uid}: unknown built-in extra photo`);
+      embeds.push(t);
+    } else if (x && typeof x.dataUrl === 'string') {
+      if (!/^data:image\//.test(x.dataUrl)) throw new Error(`item ${it.uid}: bad extra image data`);
+      embeds.push(jsStr(x.dataUrl));
+    } else {
+      throw new Error(`item ${it.uid}: bad extra photo`);
+    }
+  }
   return (
     `  { embed:${embed}, uid:${jsStr(it.uid)}, title:${jsStr(it.title)}, artist:${jsStr(it.artist)}, ` +
     `year:${jsStr(it.year)}, medium:${jsStr(it.medium)}, cat:${jsStr(it.cat)}, fit:${jsStr(it.fit || 'cover')}, ` +
-    `desc:${jsStr(it.desc)}, video:${jsStr(it.video)} }`
+    `desc:${jsStr(it.desc)}, video:${jsStr(it.video)}` +
+    (embeds.length ? `, embeds:[${embeds.join(', ')}]` : '') +
+    ` }`
   );
 }
 
@@ -210,7 +242,8 @@ module.exports = async (req, res) => {
     for (let attempt = 0; attempt < 2; attempt++) {
       const [master, head] = await Promise.all([getRaw(MASTER), getRaw(HEADBLOCK)]);
       const tokens = builtinEmbedTokens(master);
-      const newMaster = replaceArt(master, items.map((it) => artLine(it, tokens)));
+      const extraTokens = builtinExtraTokens(master);
+      const newMaster = replaceArt(master, items.map((it) => artLine(it, tokens, extraTokens)));
       const newOut = buildVisitor(newMaster, head);
       try {
         const sha = await commitFiles(
@@ -231,4 +264,4 @@ module.exports = async (req, res) => {
 };
 
 // Exposed for local tests only.
-module.exports._internal = { buildVisitor, replaceArt, artLine, builtinEmbedTokens };
+module.exports._internal = { buildVisitor, replaceArt, artLine, builtinEmbedTokens, builtinExtraTokens };
