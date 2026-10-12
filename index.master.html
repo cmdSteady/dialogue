@@ -2158,6 +2158,7 @@ let drawerOpen = false, detailOpen = false, pinOpen = false, videoOpen = false, 
 const mouse = new THREE.Vector2(-10,-10);
 let px = innerWidth/2, py = innerHeight/2, cx = px, cy = py;
 let dragging = false, lastX = 0, lastY = 0, moved = 0, hovered = null;
+let gestureHeld = false;                                      // this touch/drag already returned from an open work: it must not move the camera further
 const blocking = () => drawerOpen || pinOpen || videoOpen || aboutOpen;
 
 /* Wheel normalisation
@@ -2174,6 +2175,15 @@ function softSnap(delay){
     gsap.to(state, { target:clampT(Math.max(0, Math.min(count()-1, snap))), duration:0.95, ease:'power2.out', overwrite:'auto' });
     gsap.to(state, { orbitT:0, duration:2.2, ease:'power2.inOut' });
   }, delay);
+}
+// scrolling or dragging while a work is open: close the detail and glide back to that same work (no jump past it)
+let wheelHoldUntil = 0;                                       // rest of a wheel/trackpad gesture that already returned, ignored
+function returnToFocus(){
+  const i = state.focusP ? panels.indexOf(state.focusP) : -1;
+  const at = i >= 0 ? i : Math.round(state.target);
+  closeDetail(false, 0.9);
+  clearTimeout(Wheel.snapTimer);
+  gsap.to(state, { target:clampT(Math.max(0, Math.min(count()-1, at))), duration:0.9, ease:'power3.out', overwrite:'auto' });
 }
 // ── scroll tuning: the prologue (read slowly) and the 3D gallery (responsive) are tuned separately ──
 const SCROLL_TUNE = {
@@ -2196,7 +2206,8 @@ addEventListener('wheel', e => {
   const now = performance.now(), gap = now - Wheel.lastT; Wheel.lastT = now;
   const looksTrackpad = e.deltaMode === 0 && (Math.abs(dy) < 40 || !Number.isInteger(dy) || gap < 24);
   Wheel.trackpad = looksTrackpad;
-  if(detailOpen){ if(Math.abs(dy) < 4 && Math.abs(dx) < 4) return; closeDetail(false, 0.9); }   // scroll leaves the focus view AND scrolls at once
+  if(performance.now() < wheelHoldUntil){ wheelHoldUntil = performance.now() + 350; return; }   // inertia tail of a gesture that already returned to the open work
+  if(detailOpen){ if(Math.abs(dy) < 4 && Math.abs(dx) < 4) return; returnToFocus(); wheelHoldUntil = performance.now() + 350; return; }   // scroll on an open work: back to that same work
   // ignore the near-zero creep at the end of macOS inertial scrolling
   if(looksTrackpad && Math.abs(dy) < 1.2 && Math.abs(dx) < 1.2) return;
   const k = looksTrackpad ? SCROLL_TUNE.gallery.trackpad : SCROLL_TUNE.gallery.mouse;   // panels per px (SCROLL_TUNE)
@@ -2204,6 +2215,7 @@ addEventListener('wheel', e => {
   // lead cap: the target may never run more than N artworks ahead of the camera,
   // so a long inertial flick can't fling through the whole helix (frame-rate independent)
   const lead = looksTrackpad ? 1.1 : 2.2;
+  gsap.killTweensOf(state, 'target,orbitT');                  // a settling glide from the last snap must not pull the wheel back every frame
   state.target = clampT(Math.max(state.cur - lead, Math.min(state.cur + lead, state.target + step)));
   if(Math.abs(dx) > Math.abs(dy) * 1.2) state.orbitT = Math.max(-1.6, Math.min(1.6, state.orbitT + dx * 0.0025));
   hideHint();
@@ -2223,6 +2235,7 @@ canvas.addEventListener('pointerdown', e => {
   gsap.killTweensOf(state, 'target,orbitT');                  // a settling glide must not fight the finger
   dragging = true; moved = 0; lastX = e.clientX; lastY = e.clientY;
   swipeMode = { x:e.clientX, y:e.clientY, on:false, dx:0 };
+  gestureHeld = false;
   trail.length = 0; trail.push({ t:performance.now(), y:e.clientY });
   try{ canvas.setPointerCapture(e.pointerId); }catch(_){}
 });
@@ -2242,9 +2255,11 @@ addEventListener('pointermove', e => {
     moved += Math.abs(dx) + Math.abs(dy); lastX = e.clientX; lastY = e.clientY;
     trail.push({ t:performance.now(), y:e.clientY }); if(trail.length > 8) trail.shift();
     if(moved > 6){
-      if(detailOpen) closeDetail(false, 0.9);                       // dragging also leaves the focus view immediately
-      state.target = clampT(state.target - dy*(e.pointerType==='touch'?0.0065:0.008));
-      state.orbitT = Math.max(-1.6, Math.min(1.6, state.orbitT + dx*0.004));
+      if(detailOpen){ returnToFocus(); gestureHeld = true; }        // dragging on an open work returns to that same work
+      if(!gestureHeld){
+        state.target = clampT(state.target - dy*(e.pointerType==='touch'?0.0065:0.008));
+        state.orbitT = Math.max(-1.6, Math.min(1.6, state.orbitT + dx*0.004));
+      }
       ui.cursor.classList.add('drag'); ui.cursorTxt.textContent = 'DRAG';
       hideHint();
     }
@@ -2261,7 +2276,7 @@ addEventListener('pointerup', e => {
   swipeMode = null;
   dragging = false; ui.cursor.classList.remove('drag');
   let flung = false;
-  if(moved > 6 && !detailOpen && e.pointerType === 'touch'){   // a quick flick keeps going, then settles
+  if(moved > 6 && !detailOpen && !gestureHeld && e.pointerType === 'touch'){   // a quick flick keeps going, then settles
     const now = performance.now(), recent = trail.filter(q => now - q.t < 110);
     if(recent.length >= 2){
       const a = recent[0], b = recent[recent.length-1], v = (b.y - a.y) / Math.max(1, b.t - a.t);   // px per ms (+ = finger moved down)
@@ -2273,7 +2288,7 @@ addEventListener('pointerup', e => {
     }
   }
   trail.length = 0;
-  if(moved > 6 && !detailOpen) softSnap(flung ? 1150 : 160);     // releasing a drag settles on the nearest work (after any flick)
+  if(moved > 6 && !detailOpen && !gestureHeld) softSnap(flung ? 1150 : 160);     // releasing a drag settles on the nearest work (after any flick)
   if(moved < 8 && e.target === canvas){
     if(e.pointerType === 'touch'){ state.mx = (e.clientX/innerWidth)*2-1; state.my = -(e.clientY/innerHeight)*2+1; mouse.set(state.mx,state.my); }
     const hit = pick();                           // while a work is open, only its own surface counts as a hit
