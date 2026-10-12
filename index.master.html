@@ -1707,7 +1707,7 @@ function layoutFor(i, p){
   // perfectly regular spiral staircase: every work sits one fixed angle further round and one fixed step lower
   const theta = i*ANG_STEP;
   return { side:1, x:Math.cos(theta)*PANEL_R, y:-i*SPACING, z:Math.sin(theta)*PANEL_R,
-           ry:Math.PI/2 - theta - CAMOFF*0.55, rx:0, rz:0 };
+           ry:Math.PI/2 - theta, rx:0, rz:0 };                 // faces straight out from the spine: the work the camera stops at looks dead centre
 }
 function placePanel(p, i, animate){
   const L = layoutFor(i, p); p.L = L;
@@ -1846,7 +1846,7 @@ const camLook = new THREE.Vector3();
 
 function computeScrollPose(){
   // camera orbits the spine as it descends
-  const p = state.cur, it = state.intro, a = p*ANG_STEP + CAMOFF + state.orbit + state.spin + state.swing + state.smx*0.07, y = -p*SPACING - state.spinK*state.spinK*2.5 - state.drain*state.drain*2.2, r = (CAM_R + it*9) * (1 - 0.8*state.drain*state.drain);
+  const p = state.cur, it = state.intro, a = p*ANG_STEP + state.orbit + state.spin + state.swing + state.smx*0.07, y = -p*SPACING - state.spinK*state.spinK*2.5 - state.drain*state.drain*2.2, r = (CAM_R + it*9) * (1 - 0.8*state.drain*state.drain);
   scrollPose.pos.set(Math.cos(a)*r, y + 0.9 + state.smy*0.5 + it*2.6, Math.sin(a)*r);
   scrollPose.look.set(0, y - it*3.4, 0);
 }
