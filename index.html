@@ -3503,6 +3503,7 @@ const Gate = (() => {
   // click the star (hit-tested with the Raycaster so touch taps work too)
   canvas.addEventListener('click', e => {
     if(!G.active || !G.ready || G.running || blocking()) return;
+    if(introPending || G.starAS < 0.35) return;        // the black hole only answers once the prologue has ended and the star is visible
     if(hitTest(e.clientX, e.clientY)) G.enter();
   });
   return G;
